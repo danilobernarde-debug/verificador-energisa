@@ -1,0 +1,2023 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Verificador Energisa — Documentos Trabalhistas</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://unpkg.com/tesseract.js@4/dist/tesseract.min.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --blue: #1a56db; --blue-dark: #1e429f; --blue-light: #e8f0fe;
+  --green: #057a55; --green-light: #d1fae5;
+  --amber: #b45309; --amber-light: #fef3c7;
+  --red: #c81e1e; --red-light: #fee2e2;
+  --gray-50: #f9fafb; --gray-100: #f3f4f6; --gray-200: #e5e7eb;
+  --gray-300: #d1d5db; --gray-400: #9ca3af; --gray-500: #6b7280;
+  --gray-600: #4b5563; --gray-700: #374151; --gray-800: #1f2937;
+  --white: #ffffff;
+  --shadow: 0 1px 3px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.06);
+  --shadow-md: 0 4px 6px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.06);
+  --r: 8px; --r-sm: 4px;
+}
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--gray-50); color: var(--gray-800); min-height: 100vh; font-size: 14px; line-height: 1.5; }
+
+/* HEADER */
+.header { background: var(--blue); color: white; padding: 14px 24px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; box-shadow: var(--shadow-md); }
+.header-title { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
+.header-sub { font-size: 12px; opacity: 0.8; margin-top: 2px; }
+.header-right { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.comp-selector { display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.15); padding: 6px 12px; border-radius: var(--r); }
+.comp-selector label { font-size: 12px; opacity: 0.9; white-space: nowrap; }
+.comp-selector select { background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); color: white; padding: 4px 8px; border-radius: var(--r-sm); font-size: 13px; cursor: pointer; }
+.comp-selector select option { background: var(--blue-dark); }
+.deadline { background: rgba(255,255,255,0.15); padding: 6px 14px; border-radius: var(--r); text-align: center; min-width: 90px; }
+.deadline .days { font-size: 22px; font-weight: 700; line-height: 1; }
+.deadline .dlabel { font-size: 10px; opacity: 0.85; text-transform: uppercase; letter-spacing: 0.5px; }
+.deadline.urgent { background: rgba(220,38,38,0.45); }
+.deadline.warning { background: rgba(217,119,6,0.4); }
+.deadline.ok { background: rgba(5,122,85,0.35); }
+
+/* TABS */
+.tabs-nav { background: var(--white); border-bottom: 1px solid var(--gray-200); display: flex; padding: 0 24px; gap: 2px; overflow-x: auto; }
+.tab-btn { padding: 12px 18px; border: none; background: none; cursor: pointer; font-size: 14px; font-weight: 500; color: var(--gray-500); border-bottom: 2px solid transparent; transition: all 0.15s; white-space: nowrap; }
+.tab-btn:hover { color: var(--blue); }
+.tab-btn.active { color: var(--blue); border-bottom-color: var(--blue); }
+
+/* PANELS */
+.panel { display: none; padding: 24px; max-width: 1100px; margin: 0 auto; }
+.panel.active { display: block; }
+
+/* CARD */
+.card { background: var(--white); border-radius: var(--r); box-shadow: var(--shadow); padding: 20px; margin-bottom: 16px; }
+.card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; gap: 8px; flex-wrap: wrap; }
+.card-title { font-size: 15px; font-weight: 600; }
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 700px) { .two-col { grid-template-columns: 1fr; } }
+
+/* STATS */
+.stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px; }
+@media (max-width: 600px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } }
+.stat { background: var(--gray-50); border: 1px solid var(--gray-200); border-radius: var(--r-sm); padding: 12px; text-align: center; }
+.stat-val { font-size: 22px; font-weight: 700; color: var(--blue); }
+.stat-lbl { font-size: 11px; color: var(--gray-500); text-transform: uppercase; letter-spacing: 0.3px; }
+
+/* PROGRESS */
+.prog-wrap { margin-bottom: 4px; }
+.prog-bar { height: 8px; background: var(--gray-200); border-radius: 4px; overflow: hidden; }
+.prog-fill { height: 100%; background: var(--blue); border-radius: 4px; transition: width 0.3s; }
+.prog-fill.done { background: var(--green); }
+.prog-lbl { display: flex; justify-content: space-between; font-size: 12px; color: var(--gray-500); margin-top: 4px; }
+
+/* BADGES */
+.badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; white-space: nowrap; }
+.b-green { background: var(--green-light); color: var(--green); }
+.b-amber { background: var(--amber-light); color: var(--amber); }
+.b-red { background: var(--red-light); color: var(--red); }
+.b-blue { background: var(--blue-light); color: var(--blue); }
+.b-gray { background: var(--gray-100); color: var(--gray-600); }
+
+/* BUTTONS */
+.btn { display: inline-flex; align-items: center; gap: 5px; padding: 7px 14px; border-radius: var(--r-sm); border: none; cursor: pointer; font-size: 13px; font-weight: 500; transition: all 0.15s; }
+.btn-primary { background: var(--blue); color: white; }
+.btn-primary:hover { background: var(--blue-dark); }
+.btn-outline { background: white; color: var(--gray-700); border: 1px solid var(--gray-300); }
+.btn-outline:hover { background: var(--gray-50); }
+.btn-danger { background: white; color: var(--red); border: 1px solid var(--gray-300); }
+.btn-danger:hover { background: var(--red-light); border-color: var(--red); }
+.btn-sm { padding: 5px 10px; font-size: 12px; }
+.btn-folder { width: 100%; justify-content: center; padding: 14px; background: var(--blue); color: white; border-radius: var(--r); font-size: 14px; font-weight: 600; border: none; cursor: pointer; transition: background 0.15s; }
+.btn-folder:hover { background: var(--blue-dark); }
+
+/* FOLDER GROUP */
+.folder-group { border: 1px solid var(--gray-200); border-radius: var(--r); margin-bottom: 10px; overflow: hidden; }
+.folder-hdr { display: flex; align-items: center; padding: 11px 14px; background: var(--gray-50); cursor: pointer; user-select: none; gap: 8px; }
+.folder-hdr:hover { background: var(--gray-100); }
+.f-icon { font-size: 15px; }
+.f-name { font-weight: 600; font-size: 13px; flex: 1; }
+.f-prog { font-size: 12px; color: var(--gray-500); }
+.f-arrow { color: var(--gray-400); font-size: 10px; transition: transform 0.2s; }
+.f-arrow.open { transform: rotate(90deg); }
+.folder-body { display: none; padding: 2px 14px 10px; }
+.folder-body.open { display: block; }
+.doc-item { display: flex; align-items: flex-start; gap: 9px; padding: 7px 0; border-bottom: 1px solid var(--gray-100); }
+.doc-item:last-child { border-bottom: none; }
+.doc-item input[type="checkbox"] { width: 15px; height: 15px; margin-top: 2px; cursor: pointer; accent-color: var(--blue); flex-shrink: 0; }
+.doc-item label { cursor: pointer; font-size: 13px; color: var(--gray-700); flex: 1; }
+.doc-item.checked label { text-decoration: line-through; color: var(--gray-400); }
+.cond-lbl { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--gray-500); cursor: pointer; }
+.cond-lbl input { accent-color: var(--amber); width: 14px; height: 14px; }
+
+/* UPLOAD */
+.upload-area { border: 2px dashed var(--gray-300); border-radius: var(--r); padding: 28px 20px; text-align: center; cursor: pointer; transition: all 0.2s; background: var(--gray-50); }
+.upload-area:hover, .upload-area.over { border-color: var(--blue); background: var(--blue-light); }
+.upload-area.disabled { cursor: not-allowed; opacity: 0.5; pointer-events: none; }
+.upload-area.disabled:hover { border-color: var(--gray-300); background: var(--gray-50); }
+.upload-icon { font-size: 28px; margin-bottom: 6px; }
+.upload-text { color: var(--gray-600); font-size: 13px; }
+.upload-hint { color: var(--gray-400); font-size: 11px; margin-top: 3px; }
+input[type="file"] { display: none; }
+textarea.paste { width: 100%; height: 110px; border: 1px solid var(--gray-300); border-radius: var(--r-sm); padding: 9px; font-size: 12px; font-family: monospace; resize: vertical; outline: none; }
+textarea.paste:focus { border-color: var(--blue); }
+hr { border: none; border-top: 1px solid var(--gray-200); margin: 14px 0; }
+.sec-title { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--gray-500); margin-bottom: 10px; }
+
+/* DOC ROW (result rows) */
+.doc-row { display: flex; align-items: center; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid var(--gray-100); gap: 8px; }
+.doc-row:last-child { border-bottom: none; }
+.dr-name { font-size: 12px; color: var(--gray-700); flex: 1; }
+.dr-file { font-size: 11px; color: var(--gray-400); font-family: monospace; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; }
+
+/* FILTERS */
+.filter-bar { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin-bottom: 14px; }
+.f-btn { padding: 4px 12px; border-radius: 14px; border: 1px solid var(--gray-300); background: white; font-size: 12px; cursor: pointer; color: var(--gray-600); font-weight: 500; transition: all 0.15s; }
+.f-btn:hover { border-color: var(--blue); color: var(--blue); }
+.f-btn.active { background: var(--blue); color: white; border-color: var(--blue); }
+.search-inp { flex: 1; min-width: 180px; padding: 5px 12px; border: 1px solid var(--gray-300); border-radius: 14px; font-size: 13px; outline: none; }
+.search-inp:focus { border-color: var(--blue); }
+
+/* COLAB CARD */
+.colab-card { border: 1px solid var(--gray-200); border-radius: var(--r); margin-bottom: 8px; overflow: hidden; }
+.colab-hdr { display: flex; align-items: center; padding: 11px 14px; cursor: pointer; gap: 10px; }
+.colab-hdr:hover { background: var(--gray-50); }
+.avatar { width: 34px; height: 34px; border-radius: 50%; background: var(--blue); color: white; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px; flex-shrink: 0; }
+.colab-info { flex: 1; min-width: 0; }
+.colab-name { font-weight: 600; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.colab-meta { font-size: 11px; color: var(--gray-500); }
+.mini-prog { width: 56px; height: 4px; background: var(--gray-200); border-radius: 2px; overflow: hidden; }
+.mini-fill { height: 100%; border-radius: 2px; }
+.colab-body { display: none; padding: 2px 14px 12px; border-top: 1px solid var(--gray-100); }
+.colab-body.open { display: block; }
+.colab-footer { font-size: 11px; color: var(--gray-400); margin-top: 8px; }
+
+/* EMPTY STATE */
+.empty { text-align: center; padding: 36px 20px; color: var(--gray-400); }
+.empty-icon { font-size: 36px; margin-bottom: 10px; }
+.empty-text { font-size: 13px; }
+
+/* STATUS TEXT */
+.status-text { font-size: 12px; margin-top: 8px; }
+.status-ok { color: var(--green); }
+.status-err { color: var(--red); }
+
+/* TOAST */
+.toast { position: fixed; bottom: 20px; right: 20px; background: var(--gray-900); color: white; padding: 9px 15px; border-radius: var(--r); font-size: 13px; box-shadow: var(--shadow-md); opacity: 0; transform: translateY(6px); transition: all 0.2s; z-index: 9999; pointer-events: none; }
+.toast.show { opacity: 1; transform: translateY(0); }
+
+/* RENOMEAR TABLE */
+.ren-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.ren-table thead tr { background: var(--gray-50); border-bottom: 2px solid var(--gray-200); }
+.ren-table th { padding: 8px 10px; text-align: left; font-weight: 600; color: var(--gray-600); white-space: nowrap; }
+.ren-table th.tc { text-align: center; }
+.ren-table tbody tr { border-bottom: 1px solid var(--gray-100); transition: background 0.1s; }
+.ren-table tbody tr:hover { background: var(--gray-50); }
+.ren-table td { padding: 7px 10px; vertical-align: middle; }
+.ren-table td.tc { text-align: center; }
+.ren-orig { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--blue); display: block; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.ren-orig:hover { color: var(--blue-dark); }
+.ren-new  { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: monospace; color: var(--gray-700); display: block; }
+.ren-inp  { width: 100%; padding: 5px 8px; border: 1px solid var(--gray-300); border-radius: 4px; font-size: 12px; outline: none; }
+.ren-inp:focus { border-color: var(--blue); }
+.info-box { background: var(--blue-light); border: 1px solid #bfdbfe; border-radius: var(--r-sm); padding: 10px 14px; margin-bottom: 14px; font-size: 12px; color: var(--blue-dark); }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="header">
+  <div>
+    <div class="header-title">⚡ Verificador Energisa</div>
+    <div class="header-sub">Controle de documentos trabalhistas — Grupo Energisa</div>
+  </div>
+  <div class="header-right">
+    <div class="comp-selector">
+      <label>Competência:</label>
+      <select id="selMes">
+        <option value="1">Janeiro</option><option value="2">Fevereiro</option>
+        <option value="3">Março</option><option value="4">Abril</option>
+        <option value="5">Maio</option><option value="6">Junho</option>
+        <option value="7">Julho</option><option value="8">Agosto</option>
+        <option value="9">Setembro</option><option value="10">Outubro</option>
+        <option value="11">Novembro</option><option value="12">Dezembro</option>
+      </select>
+      <select id="selAno"></select>
+    </div>
+    <div class="deadline" id="dlBadge">
+      <div class="days" id="dlDays">--</div>
+      <div class="dlabel" id="dlLabel">dias p/ prazo</div>
+    </div>
+  </div>
+</header>
+
+<!-- TAB NAV -->
+<nav class="tabs-nav">
+  <button class="tab-btn active" data-tab="checklist">📋 Checklist Mensal</button>
+  <button class="tab-btn" data-tab="pastas">📁 Verificador de Pastas</button>
+  <button class="tab-btn" data-tab="colabs">👥 Por Colaborador</button>
+  <button class="tab-btn" data-tab="renomear">✏️ Renomear Comprovantes</button>
+</nav>
+
+<!-- ===== TAB 1: CHECKLIST ===== -->
+<div class="panel active" id="panel-checklist">
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Progresso — <span id="compLabel"></span></span>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-outline btn-sm" onclick="exportChecklist()">⬇ Exportar</button>
+        <button class="btn btn-danger btn-sm" onclick="resetChecklist()">↺ Resetar</button>
+      </div>
+    </div>
+    <div class="stats-grid">
+      <div class="stat"><div class="stat-val" id="sTotal">0</div><div class="stat-lbl">Total</div></div>
+      <div class="stat"><div class="stat-val" id="sOk" style="color:var(--green)">0</div><div class="stat-lbl">Enviados</div></div>
+      <div class="stat"><div class="stat-val" id="sPend" style="color:var(--red)">0</div><div class="stat-lbl">Pendentes</div></div>
+      <div class="stat"><div class="stat-val" id="sPct">0%</div><div class="stat-lbl">Completo</div></div>
+    </div>
+    <div class="prog-wrap">
+      <div class="prog-bar"><div class="prog-fill" id="mainFill" style="width:0%"></div></div>
+      <div class="prog-lbl"><span id="mainCount">0 documentos enviados</span><span id="mainPct">0%</span></div>
+    </div>
+  </div>
+  <div id="checklistContainer"></div>
+</div>
+
+<!-- ===== TAB 2: PASTAS ===== -->
+<div class="panel" id="panel-pastas">
+
+  <!-- ZIP Upload Principal -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">📦 ZIP do SharePoint</span>
+      <span id="zipStatus" class="status-text status-ok"></span>
+    </div>
+    <div class="upload-area" id="upZip" onclick="document.getElementById('fpZip').click()">
+      <div class="upload-icon">📦</div>
+      <div class="upload-text">Clique ou arraste o arquivo ZIP baixado do SharePoint</div>
+      <div class="upload-hint">Ex: 02-2026.zip — detecta pastas, colaboradores e documentos automaticamente</div>
+    </div>
+    <input type="file" id="fpZip" accept=".zip">
+
+    <!-- Info pós-carregamento -->
+    <div id="zipInfo" style="display:none;margin-top:14px;padding-top:12px;border-top:1px solid var(--gray-200)">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <span id="zipFileName" style="font-size:13px;font-weight:600;color:var(--gray-700)"></span>
+        <span id="zipBadgePastas" class="badge b-blue"></span>
+        <span id="zipBadgeArqs" class="badge b-gray"></span>
+        <span id="zipBadgeColabs" class="badge b-green"></span>
+        <div style="display:flex;align-items:center;gap:6px;margin-left:auto">
+          <label style="font-size:12px;color:var(--gray-500);white-space:nowrap">Contrato:</label>
+          <select id="contratoSel" onchange="onContratoChange()" style="padding:4px 8px;border:1px solid var(--gray-300);border-radius:4px;font-size:13px;color:var(--gray-700)"></select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Resultado por Pasta -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Resultado por Pasta</span>
+      <button class="btn btn-outline btn-sm" onclick="exportPastasReport()">⬇ Exportar</button>
+    </div>
+    <div id="pastasResult">
+      <div class="empty"><div class="empty-icon">📦</div><div class="empty-text">Carregue o ZIP do SharePoint para ver o resultado</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== TAB 3: COLABORADORES ===== -->
+<div class="panel" id="panel-colabs">
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Colaboradores</span>
+      <div style="display:flex;align-items:center;gap:10px">
+        <span id="colabContratoInfo" style="font-size:12px;color:var(--gray-500)"></span>
+        <button class="btn btn-outline btn-sm" onclick="exportColabReport()">⬇ Exportar</button>
+      </div>
+    </div>
+    <div class="filter-bar">
+      <button class="f-btn active" data-filter="todos">Todos</button>
+      <button class="f-btn" data-filter="ativos">Só ativos</button>
+      <button class="f-btn" data-filter="pendencia">Com pendência</button>
+      <button class="f-btn" data-filter="completos">Completos</button>
+      <input class="search-inp" id="colabSearch" type="text" placeholder="Buscar colaborador...">
+    </div>
+    <div id="colabContainer">
+      <div class="empty">
+        <div class="empty-icon">📦</div>
+        <div class="empty-text">Carregue o ZIP na aba "Verificador de Pastas" para ver os colaboradores</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== TAB 4: RENOMEAR COMPROVANTES ===== -->
+<div class="panel" id="panel-renomear">
+
+  <!-- Upload card -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">✏️ Renomear Comprovantes de Pagamento</span>
+    </div>
+    <!-- Planilha Força de Trabalho (opcional, mas melhora muito o reconhecimento) -->
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding:10px 14px;border:1px solid var(--gray-200);border-radius:var(--r-sm);background:var(--gray-50)">
+      <span style="font-size:20px">👥</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:600;color:var(--gray-700)">Lista de colaboradores
+          <span id="renomearFTBadge" class="badge b-gray" style="margin-left:6px">não carregada</span>
+        </div>
+        <div style="font-size:11px;color:var(--gray-500);margin-top:2px">Carregue a planilha para identificar comprovantes pelo nome — ou use o ZIP na aba "Verificador de Pastas"</div>
+        <div style="font-size:11px;color:var(--amber);margin-top:4px">⚠ A planilha deve ter colunas com os nomes <strong>Colaborador</strong>, <strong>Contrato</strong> e <strong>Salário</strong> no cabeçalho (linha 1).</div>
+      </div>
+      <button class="btn btn-outline btn-sm" onclick="document.getElementById('fpFT').click()">📂 Carregar XLSX</button>
+      <input type="file" id="fpFT" accept=".xlsx,.xls">
+    </div>
+
+    <div class="upload-area disabled" id="upRenomear" onclick="document.getElementById('fpRenomear').click()">
+      <div class="upload-icon" id="upRenomearIcon">🔒</div>
+      <div class="upload-text" id="upRenomearText">Carregue a planilha de colaboradores primeiro</div>
+      <div class="upload-hint" id="upRenomearHint">O arquivo XLSX é necessário para identificar os comprovantes</div>
+    </div>
+    <input type="file" id="fpRenomear" multiple>
+  </div>
+
+  <!-- Table card (hidden until files uploaded) -->
+  <div class="card" id="renomearTableCard" style="display:none">
+    <div class="card-header">
+      <span class="card-title">Arquivos para renomear</span>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <span id="renomearCount" class="badge b-blue"></span>
+        <span id="renomearAutoCount" class="badge b-green"></span>
+        <button class="btn btn-outline btn-sm" onclick="clearRenomear()">✕ Limpar tudo</button>
+        <button class="btn btn-primary btn-sm" onclick="downloadRenameZip()">⬇ Baixar ZIP renomeado</button>
+      </div>
+    </div>
+    <datalist id="dlColabs"></datalist>
+    <div style="overflow-x:auto">
+      <table class="ren-table">
+        <thead>
+          <tr>
+            <th style="width:22%">Arquivo original</th>
+            <th style="width:26%">Colaborador</th>
+            <th style="width:22%">Novo nome</th>
+            <th class="tc" style="width:16%" title="Valor encontrado no comprovante vs. salário da planilha. Pode divergir se for salário líquido.">Valor comprovante</th>
+            <th class="tc" style="width:10%">Status</th>
+            <th class="tc" style="width:4%"></th>
+          </tr>
+        </thead>
+        <tbody id="renomearTbody"></tbody>
+      </table>
+    </div>
+    <p style="font-size:11px;color:var(--gray-400);margin-top:10px">
+      💾 O ZIP gerado terá os arquivos organizados em <code>COMPROVANTES DE PAGAMENTO/<em>CONTRATO</em>/NOME DO COLABORADOR.ext</code> — separados por contrato quando a coluna "Contrato" estiver preenchida na planilha. &nbsp;·&nbsp; ✅ Verde na coluna Valor = comprovante confere com o salário da planilha. ⚠ Vermelho = divergência (pode ser salário líquido vs. bruto).
+    </p>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── CONSTANTS ───────────────────────────────────────────────────────────────
+
+const MESES = ['','Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+               'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+const STOPWORDS = new Set(['de','da','do','dos','das','e','dos','a','o','as','os']);
+
+const ESTRUTURA = [
+  { id:'acordo', nome:'Acordo Coletivo', ico:'📄', cond:false,
+    docs:['Acordo ou Convenção Coletiva da Categoria vigente'] },
+
+  { id:'admissoes', nome:'Admissões', ico:'✅', cond:true,
+    docs:['Documentos de admissão dos novos colaboradores do mês'] },
+
+  { id:'comp_seguro', nome:'Comp. Pagamento Seguro de Vida', ico:'🛡️', cond:false,
+    docs:['Boleto do Seguro de Vida','Comprovante de pagamento do Seguro de Vida','Demonstração do Seguro de Vida'] },
+
+  { id:'declaracoes', nome:'Declarações', ico:'📋', cond:false,
+    docs:['01 - Declaração de acidente de trabalho',
+          '02 - Declaração de Subcontratação',
+          '03 - Declaração de Transferência',
+          '04 - Declaração de admissão-alocação',
+          '05 - Declaração de demissão',
+          '06 - Declaração de férias'] },
+
+  { id:'demissoes', nome:'Demissões', ico:'🚪', cond:true,
+    docs:['Documentos rescisórios dos colaboradores demitidos no mês'] },
+
+  { id:'ferias', nome:'Férias', ico:'🏖️', cond:true,
+    docs:['Recibo de férias (8.1) — por colaborador','Comprovante de pagamento de férias (8.2) — por colaborador'] },
+
+  { id:'fopag', nome:'FOPAG e Comp. de Pagto', ico:'💰', cond:false,
+    docs:['Extrato Mensal / FOPAG analítico',
+          'Holerites (PDF agrupado)',
+          'Comprovantes de pagamento individuais (pasta por colaborador)'] },
+
+  { id:'gfip', nome:'GFIP', ico:'🏦', cond:false,
+    docs:['DCTFWeb - Declaração Completa',
+          'DCTFWeb - Recibo',
+          'DCTFWeb - Resumo de Débitos',
+          'DCTFWeb - Resumo de Créditos',
+          'DARF do mês',
+          'Guia FGTS Energisa',
+          'Comprovante de pagamento FGTS',
+          'Detalhamento FGTS Energisa'] },
+
+  { id:'parcelamento', nome:'Parcelamento', ico:'📑', cond:true,
+    docs:['DARF do parcelamento','Comprovante de pagamento da parcela'] },
+
+  { id:'plano_saude', nome:'Plano de Saúde', ico:'🏥', cond:false,
+    docs:['Boleto do Plano de Saúde','Comprovante de pagamento do Plano de Saúde','Demonstrativo do Plano de Saúde'] },
+
+  { id:'ponto', nome:'Ponto', ico:'⏰', cond:false,
+    docs:['Folha de ponto de cada colaborador (arquivo individual por nome)'] },
+
+  { id:'va_vr', nome:'VA e VR', ico:'🍽️', cond:false,
+    docs:['Boleto VA/VR','Comprovante de pagamento VA/VR','Demonstrativo VA/VR'] },
+
+  { id:'vt', nome:'VT', ico:'🚌', cond:false,
+    docs:['PDF de Vale Transporte (ou declaração de não aplicabilidade)'] },
+
+  { id:'ft', nome:'Força de Trabalho', ico:'📊', cond:false,
+    docs:['001 FORÇA DE TRABALHO MM-AAAA.xlsx — planilha atualizada com todos os colaboradores'] },
+];
+
+// Documentos por colaborador — folder: nome da pasta no ZIP (fuzzy match aplicado)
+const DOC_TYPES = {
+  // Comprovantes ficam em "FOPAG e Comp. de Pagto/COMPROVANTES DE PAGAMENTO/NOME.pdf"
+  comprovante: { label:'Comprovante de pagamento', folder:'COMPROVANTES DE PAGAMENTO', kw:[] },
+  // Pontos ficam em "Ponto/NOME.pdf"
+  ponto:       { label:'Folha de ponto',           folder:'Ponto',                     kw:[] },
+  // Férias ficam em "Ferias/NOME/7.1 Ferias - NOME.png" e "7.2 Comp. NOME.png"
+  ferias:      { label:'Recibo/Comp. de férias',   folder:'Ferias',                    kw:['ferias'] },
+  // Rescisórios ficam em "Demissões/" (pasta vazia se não houve demissão)
+  trct:        { label:'Documentos rescisórios',   folder:'Demissoes',                 kw:[] },
+};
+
+// Pasta verification checks — baseado na estrutura real do SharePoint (verificado com 02-2026.zip)
+const PASTA_CHECKS = [
+  { pasta:'Acordo Coletivo', ico:'📄',
+    docs:[{ nome:'Acordo/Convenção Coletiva (CCT)', kw:['acordo','convencao','coletiv','sindic','cct'] }] },
+
+  { pasta:'Comp. Pagamento Seguro de Vida', ico:'🛡️',
+    docs:[
+      { nome:'Boleto Seguro de Vida',       kw:['boleto'] },
+      // Arquivo real: "Comp. Seg Vida - 02.2026.jpeg"
+      { nome:'Comprovante pgto Seguro',     kw:['comp seg','comprov seg','comprovante seg','pgto seg'] },
+      // Arquivo real: "SEGURADOS_VIGENTES_SUB_1_...pdf" ou "DEMONSTRATIVO_01.2026.pdf"
+      { nome:'Demonstração / Lista Segurados', kw:['demonstrativo','demonstr','segurado','vigente','lista seg'] },
+    ]},
+
+  { pasta:'Declarações', ico:'📋',
+    docs:[
+      { nome:'01 - Decl. acidente de trabalho', kw:['01','acidente'] },
+      { nome:'02 - Decl. Subcontratação',        kw:['02','subcontrat'] },
+      { nome:'03 - Decl. Transferência',         kw:['03','transferen','transferencia'] },
+      { nome:'04 - Decl. Admissão-alocação',     kw:['04','admissao','alocacao'] },
+      { nome:'05 - Decl. Demissão',              kw:['05','demissao'] },
+      { nome:'06 - Decl. Férias',                kw:['06','ferias'] },
+    ]},
+
+  { pasta:'FOPAG e Comp. de Pagto', ico:'💰',
+    docs:[
+      { nome:'Extrato Mensal / FOPAG',             kw:['extrato mensal','fopag','folha pag'] },
+      { nome:'Holerites (PDF)',                    kw:['holerite','holrite'] },
+      // Comprovantes ficam em subpasta "COMPROVANTES DE PAGAMENTO" nomeados por colaborador
+      { nome:'Comprovantes individuais de pgto',   kw:[], checkSubfolder:'COMPROVANTES DE PAGAMENTO' },
+    ]},
+
+  { pasta:'GFIP', ico:'🏦',
+    docs:[
+      // Arquivo real: "DCTFWeb_DeclaracaoCompleta.pdf"
+      { nome:'DCTFWeb - Declaração Completa', kw:['declaracaocompleta','declaracao completa'] },
+      // Arquivo real: "DCTFWeb_Recibo.pdf"
+      { nome:'DCTFWeb - Recibo',              kw:['dctfweb recibo','dctfweb_recibo','recibo dctf'] },
+      // Arquivo real: "DCTFWeb_ResumoDebitos.pdf"
+      { nome:'DCTFWeb - Resumo Débitos',      kw:['resumodebitos','resumo debito'] },
+      // Arquivo real: "DCTFWeb_ResumoCreditos.pdf"
+      { nome:'DCTFWeb - Resumo Créditos',     kw:['resumocreditos','resumo credito'] },
+      // Arquivo real: "DARF INSS_IRRF 02.2026.pdf"
+      { nome:'DARF Previdenciário',           kw:['darf'] },
+      // Arquivo real: "Guia do FGTS DIGITAL 02.2026.pdf"
+      { nome:'Guia FGTS Digital',             kw:['guia fgts','guia do fgts','fgts digital'] },
+      // Arquivo real: "Comprovante de Pagamento do FGTS DIGITAL 01.2026.jpeg" (jan tem "do", fev não)
+      { nome:'Comprovante pgto FGTS',         kw:['comprovante de pagamento','comprovante fgts','comp fgts'] },
+      // Arquivo real: "Detalhamento do FGTS DIGITAL- 02.2026.pdf"
+      { nome:'Detalhamento FGTS',             kw:['detalhamento do fgts','detalhamento fgts','detalhe fgts'] },
+    ]},
+
+  { pasta:'Plano de Saude', ico:'🏥',
+    docs:[
+      // Arquivo real: "boleto - 2026-03-11T135203.451.pdf"
+      { nome:'Boleto Plano de Saúde',        kw:['boleto'] },
+      // Arquivo real: "Comp. 148.491,98.jpeg"
+      { nome:'Comprovante pgto Plano',       kw:['comp'] },
+      // Arquivo real: "DB MACHADO DEMONSTRAT. ANALITICO FEV..pdf"
+      { nome:'Demonstrativo Plano de Saúde', kw:['demonstrat','demonstrativo','analitico'] },
+    ]},
+
+  { pasta:'Ponto', ico:'⏰',
+    // Arquivos nomeados por colaborador — qualquer arquivo na pasta é suficiente
+    docs:[{ nome:'Folha de ponto (por colaborador)', kw:[] }] },
+
+  { pasta:'VA e VR', ico:'🍽️',
+    docs:[
+      { nome:'Boleto VA/VR',        kw:['boleto va','boleto vr','boleto alim'] },
+      // Arquivo real: "Comp. VA TO - 31.180,30.jpeg"
+      { nome:'Comprovante VA/VR',   kw:['comp va','comp vr','comprov va','comprov vr','comprovante va'] },
+      // Arquivo real: "Demonstrativo VA TO - 47.199,32.pdf"
+      { nome:'Demonstrativo VA/VR', kw:['demonstrativo va','demonstrativo vr','demonstr va','demonstr vr'] },
+    ]},
+
+  { pasta:'VT', ico:'🚌',
+    // Arquivo real: "VT - Não se aplica.pdf"
+    docs:[{ nome:'VT (ou declaração não aplicável)', kw:['vt','nao se aplica','transporte','declaracao vt'] }] },
+
+  { pasta:'Força de Trabalho', ico:'📊',
+    // Arquivo fica na raiz do ZIP — fallback __root__ no getFilesFromFolder
+    docs:[{ nome:'001 FORÇA DE TRABALHO MM-AAAA.xlsx', kw:['001','forca','forca de trabalho'] }] },
+];
+
+// ─── STATE ────────────────────────────────────────────────────────────────────
+
+const S = {
+  comp: { mes: 0, ano: 0 },
+  checklist: {},
+  colaboradores: [],   // do Excel dentro do ZIP, filtrado por contrato
+  contratoSel: '',
+  filter: 'todos',
+  zip: {
+    loaded: false,
+    fileName: '',
+    foldersMap: {},    // folderName -> [fileNames]  (pasta -> arquivos)
+    allFiles: [],
+    contratos: [],     // contratos únicos do Excel
+    workbook: null,    // Força de Trabalho workbook
+  },
+  renomear: [],        // [{ file, colabName, auto, score }]
+};
+
+// ─── UTILS ────────────────────────────────────────────────────────────────────
+
+function norm(str) {
+  return (str||'').toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g,'')
+    .replace(/[_\-\.]/g,' ').replace(/\s+/g,' ').trim();
+}
+
+function nameParts(fullName) {
+  return norm(fullName).split(' ').filter(p => p.length > 1 && !STOPWORDS.has(p));
+}
+
+function nameScore(colabName, filename) {
+  const parts = nameParts(colabName);
+  if (!parts.length) return 0;
+  const f = norm(filename);
+  return parts.filter(p => f.includes(p)).length / parts.length;
+}
+
+function initials(name) {
+  const pts = name.split(' ').filter(p => p.length > 1 && !STOPWORDS.has(p.toLowerCase()));
+  if (pts.length >= 2) return (pts[0][0] + pts[pts.length-1][0]).toUpperCase();
+  return name.substring(0,2).toUpperCase();
+}
+
+function compKey() { return `${S.comp.ano}_${String(S.comp.mes).padStart(2,'0')}`; }
+function lsKey(t) { return `energisa_${t}_${compKey()}`; }
+
+function toast(msg, ms=2500) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), ms);
+}
+
+function extractFileNames(text) {
+  return text.split(/[\n\r]+/).map(l => l.trim()).filter(l => l.length > 2);
+}
+
+// ─── COMPETÊNCIA / DEADLINE ───────────────────────────────────────────────────
+
+function initComp() {
+  const selMes = document.getElementById('selMes');
+  const selAno = document.getElementById('selAno');
+  const now = new Date();
+  const yr = now.getFullYear();
+  for (let y = yr-2; y <= yr+1; y++) {
+    const o = document.createElement('option');
+    o.value = y; o.textContent = y;
+    if (y === yr) o.selected = true;
+    selAno.appendChild(o);
+  }
+  const saved = localStorage.getItem('energisa_comp');
+  let mes, ano;
+  if (saved) { const c = JSON.parse(saved); mes = c.mes; ano = c.ano; }
+  else {
+    mes = now.getMonth(); // 0-indexed = previous month
+    ano = yr;
+    if (mes === 0) { mes = 12; ano--; }
+  }
+  selMes.value = mes; selAno.value = ano;
+  S.comp = { mes, ano };
+  selMes.addEventListener('change', onCompChange);
+  selAno.addEventListener('change', onCompChange);
+  updateDeadline();
+  updateCompLabel();
+}
+
+function onCompChange() {
+  S.comp = { mes: +document.getElementById('selMes').value, ano: +document.getElementById('selAno').value };
+  localStorage.setItem('energisa_comp', JSON.stringify(S.comp));
+  loadState();
+  updateDeadline();
+  updateCompLabel();
+  renderChecklist();
+  renderColabs();
+}
+
+function updateCompLabel() {
+  document.getElementById('compLabel').textContent = `${MESES[S.comp.mes]} / ${S.comp.ano}`;
+}
+
+function updateDeadline() {
+  let dlMes = S.comp.mes + 1, dlAno = S.comp.ano;
+  if (dlMes > 12) { dlMes = 1; dlAno++; }
+  const deadline = new Date(dlAno, dlMes-1, 25, 23, 59, 59);
+  const diff = deadline - new Date();
+  const days = Math.ceil(diff / 86400000);
+  const badge = document.getElementById('dlBadge');
+  const dEl = document.getElementById('dlDays');
+  const lEl = document.getElementById('dlLabel');
+  if (diff < 0) {
+    dEl.textContent = 'VENCIDO';
+    lEl.textContent = `era 25/${String(dlMes).padStart(2,'0')}/${dlAno}`;
+    badge.className = 'deadline urgent';
+  } else {
+    dEl.textContent = days;
+    lEl.textContent = `dias p/ 25/${String(dlMes).padStart(2,'0')}`;
+    badge.className = 'deadline ' + (days <= 5 ? 'urgent' : days <= 10 ? 'warning' : 'ok');
+  }
+}
+
+// ─── TABS ─────────────────────────────────────────────────────────────────────
+
+function initTabs() {
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
+    });
+  });
+}
+
+// ─── STORAGE ──────────────────────────────────────────────────────────────────
+
+function loadState() {
+  const ck = localStorage.getItem(lsKey('checklist'));
+  S.checklist = ck ? JSON.parse(ck) : {};
+}
+
+// ─── TAB 1: CHECKLIST ────────────────────────────────────────────────────────
+
+function calcStats() {
+  let total = 0, ok = 0;
+  ESTRUTURA.forEach(f => {
+    const fs = S.checklist[f.id];
+    if (!fs || !fs.active) return;
+    f.docs.forEach((_, i) => { total++; if (fs.docs && fs.docs[i]) ok++; });
+  });
+  return { total, ok, pend: total - ok, pct: total ? Math.round(ok/total*100) : 0 };
+}
+
+function updateStats() {
+  const { total, ok, pend, pct } = calcStats();
+  document.getElementById('sTotal').textContent = total;
+  document.getElementById('sOk').textContent = ok;
+  document.getElementById('sPend').textContent = pend;
+  document.getElementById('sPct').textContent = pct + '%';
+  const fill = document.getElementById('mainFill');
+  fill.style.width = pct + '%';
+  fill.className = 'prog-fill' + (pct === 100 ? ' done' : '');
+  document.getElementById('mainPct').textContent = pct + '%';
+  document.getElementById('mainCount').textContent = `${ok} de ${total} documentos enviados`;
+}
+
+function renderChecklist() {
+  const container = document.getElementById('checklistContainer');
+  container.innerHTML = '';
+
+  ESTRUTURA.forEach(f => {
+    if (!S.checklist[f.id]) S.checklist[f.id] = { active: !f.cond, docs: {} };
+    const fs = S.checklist[f.id];
+    const active = fs.active;
+    const checked = active ? f.docs.filter((_, i) => fs.docs && fs.docs[i]).length : 0;
+    const total = active ? f.docs.length : 0;
+    const pct = total ? Math.round(checked/total*100) : 0;
+
+    const badge = !active
+      ? '<span class="badge b-gray">N/A este mês</span>'
+      : checked === total
+        ? '<span class="badge b-green">✓ Completo</span>'
+        : checked > 0
+          ? '<span class="badge b-amber">Em andamento</span>'
+          : '<span class="badge b-red">Pendente</span>';
+
+    const div = document.createElement('div');
+    div.className = 'folder-group';
+    div.innerHTML = `
+      <div class="folder-hdr" onclick="toggleFolder('${f.id}')">
+        <span class="f-icon">${f.ico}</span>
+        <span class="f-name">${f.nome}</span>
+        ${f.cond ? `<label class="cond-lbl" onclick="event.stopPropagation()">
+          <input type="checkbox" ${active?'checked':''} onchange="setFolderActive('${f.id}',this.checked)">
+          Ocorreu este mês
+        </label>` : ''}
+        ${badge}
+        <span class="f-prog">${active ? checked+'/'+total : ''}</span>
+        <span class="f-arrow" id="arr-${f.id}">▶</span>
+      </div>
+      <div class="folder-body" id="body-${f.id}">
+        ${!active && f.cond ? '<p style="color:var(--gray-400);font-size:12px;padding:8px 0">Marque "Ocorreu este mês" para ativar os documentos desta pasta.</p>' : ''}
+        ${active ? f.docs.map((doc, i) => `
+          <div class="doc-item ${fs.docs && fs.docs[i] ? 'checked' : ''}" id="di-${f.id}-${i}">
+            <input type="checkbox" id="chk-${f.id}-${i}" ${fs.docs && fs.docs[i] ? 'checked' : ''}
+              onchange="toggleDoc('${f.id}',${i},this.checked)">
+            <label for="chk-${f.id}-${i}">${doc}</label>
+          </div>
+        `).join('') : ''}
+      </div>`;
+    container.appendChild(div);
+  });
+
+  updateStats();
+}
+
+function toggleFolder(id) {
+  document.getElementById('body-'+id).classList.toggle('open');
+  document.getElementById('arr-'+id).classList.toggle('open');
+}
+
+function setFolderActive(id, active) {
+  S.checklist[id].active = active;
+  localStorage.setItem(lsKey('checklist'), JSON.stringify(S.checklist));
+  renderChecklist();
+  if (active) {
+    setTimeout(() => {
+      document.getElementById('body-'+id).classList.add('open');
+      document.getElementById('arr-'+id).classList.add('open');
+    }, 10);
+  }
+}
+
+function toggleDoc(fid, idx, checked) {
+  if (!S.checklist[fid]) S.checklist[fid] = { active: true, docs: {} };
+  if (!S.checklist[fid].docs) S.checklist[fid].docs = {};
+  S.checklist[fid].docs[idx] = checked;
+  localStorage.setItem(lsKey('checklist'), JSON.stringify(S.checklist));
+  const item = document.getElementById(`di-${fid}-${idx}`);
+  if (item) item.classList.toggle('checked', checked);
+  updateStats();
+}
+
+function resetChecklist() {
+  if (!confirm('Resetar o checklist de ' + MESES[S.comp.mes] + '/' + S.comp.ano + '?')) return;
+  S.checklist = {};
+  localStorage.setItem(lsKey('checklist'), JSON.stringify(S.checklist));
+  renderChecklist();
+  toast('Checklist resetado');
+}
+
+function exportChecklist() {
+  const { total, ok, pend, pct } = calcStats();
+  let lines = [
+    `CHECKLIST ENERGISA — ${MESES[S.comp.mes].toUpperCase()}/${S.comp.ano}`,
+    `Gerado em: ${new Date().toLocaleString('pt-BR')}`,
+    `Progresso: ${ok}/${total} (${pct}%)`,
+    '='.repeat(55), ''
+  ];
+  ESTRUTURA.forEach(f => {
+    const fs = S.checklist[f.id] || {};
+    const active = fs.active !== undefined ? fs.active : !f.cond;
+    lines.push(`[${f.nome}]${!active ? ' — N/A este mês' : ''}`);
+    if (active) f.docs.forEach((d,i) => lines.push(`  ${fs.docs && fs.docs[i] ? '[X]' : '[ ]'} ${d}`));
+    lines.push('');
+  });
+  download(lines.join('\n'), `checklist_energisa_${compKey()}.txt`, 'text/plain');
+  toast('Checklist exportado!');
+}
+
+// ─── TAB 2 & 3: ZIP INTELIGENTE ──────────────────────────────────────────────
+
+function initZipUpload() {
+  const inp = document.getElementById('fpZip');
+  inp.addEventListener('change', () => { if (inp.files[0]) loadZip(inp.files[0]); });
+  const area = document.getElementById('upZip');
+  area.addEventListener('dragover', e => { e.preventDefault(); area.classList.add('over'); });
+  area.addEventListener('dragleave', () => area.classList.remove('over'));
+  area.addEventListener('drop', e => {
+    e.preventDefault(); area.classList.remove('over');
+    if (e.dataTransfer.files[0]) loadZip(e.dataTransfer.files[0]);
+  });
+}
+
+// ─── ZIP LOADER ───────────────────────────────────────────────────────────────
+
+async function loadZip(file) {
+  const statusEl = document.getElementById('zipStatus');
+  statusEl.textContent = 'Lendo ZIP...'; statusEl.className = 'status-text';
+  try {
+    const ab = await file.arrayBuffer();
+    const zip = await JSZip.loadAsync(ab);
+
+    // Build foldersMap: folderName -> [fileNames]
+    const foldersMap = {};
+    const allFiles = [];
+    zip.forEach((path, entry) => {
+      if (entry.dir) return;
+      const parts = path.split('/');
+      const fileName = parts[parts.length - 1];
+      if (!fileName || fileName.startsWith('.') || path.includes('__MACOSX')) return;
+      allFiles.push(fileName);
+      // Add file to ALL ancestor folders — skip parts[0] (root container "02-2026")
+      // This allows Ferias/COLABORADOR/arquivo.png to appear under "Ferias" too
+      for (let i = 1; i < parts.length - 1; i++) {
+        const folder = parts[i];
+        if (!folder) continue;
+        if (!foldersMap[folder]) foldersMap[folder] = [];
+        foldersMap[folder].push(fileName);
+      }
+      // Root-level files (direct children of zip root, e.g. 001 FORÇA DE TRABALHO.xlsx)
+      if (parts.length === 2) {
+        if (!foldersMap['__root__']) foldersMap['__root__'] = [];
+        foldersMap['__root__'].push(fileName);
+      }
+    });
+    S.zip.foldersMap = foldersMap;
+    S.zip.allFiles = allFiles;
+    S.zip.fileName = file.name;
+    S.zip.loaded = true;
+
+    // Find and read Força de Trabalho xlsx inside the ZIP
+    let ftEntry = null, ftPath = null;
+    zip.forEach((path, entry) => {
+      if (!entry.dir && !ftPath) {
+        const n = norm(path);
+        if ((n.includes('forca') || n.includes('001')) && path.toLowerCase().endsWith('.xlsx')) {
+          ftPath = path; ftEntry = entry;
+        }
+      }
+    });
+    if (ftEntry) {
+      const ftAb = await ftEntry.async('arraybuffer');
+      const wb = XLSX.read(ftAb, { type: 'array' });
+      S.zip.workbook = wb;
+      extrairContratos(wb);
+    } else {
+      S.zip.workbook = null;
+      S.zip.contratos = [];
+      S.colaboradores = [];
+    }
+
+    atualizarZipUI();
+    atualizarRenomearFTBadge();
+    analyzePastas();
+    renderColabs();
+    statusEl.textContent = '✓ ZIP carregado'; statusEl.className = 'status-text status-ok';
+    const nP = Object.keys(foldersMap).length;
+    toast('✓ ZIP carregado: ' + allFiles.length + ' arquivos em ' + nP + ' pastas');
+  } catch(err) {
+    statusEl.textContent = '✗ Erro ao ler ZIP'; statusEl.className = 'status-text status-err';
+    alert('Erro ao ler o ZIP: ' + err.message);
+    console.error(err);
+  }
+}
+
+function extrairContratos(wb) {
+  const sheet = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+  const set = new Set();
+  for (let i = 1; i < rows.length; i++) {
+    const c = String(rows[i][1] || '').trim();
+    if (c) set.add(c);
+  }
+  S.zip.contratos = [...set];
+  const sel = document.getElementById('contratoSel');
+  sel.innerHTML = S.zip.contratos.map(c => '<option value="' + c + '">' + c + '</option>').join('');
+  S.contratoSel = S.zip.contratos[0] || '';
+  extrairColaboradores(wb, S.contratoSel);
+}
+
+function extrairColaboradores(wb, contrato) {
+  if (!wb) return;
+  const sheet = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+  const map = new Map();
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r || r.length < 10) continue;
+    const ctr = String(r[1] || '').trim();
+    if (contrato && ctr !== contrato) continue;
+    const nome = String(r[7] || '').trim();
+    if (!nome) continue;
+    if (map.has(nome)) continue;
+    map.set(nome, {
+      nome,
+      empresa:  String(r[0]  || '').trim(),
+      contrato: ctr,
+      situacao: String(r[8]  || '').trim().toUpperCase(),
+      funcao:   String(r[10] || '').trim(),
+      anoComp:  String(r[5]  || '').trim(),
+      mesComp:  String(r[6]  || '').trim(),
+      dataAdm:  String(r[16] || '').trim(),
+      dataDem:  String(r[17] || '').trim(),
+      afastado: String(r[18] || '').trim().toLowerCase() === 'sim',
+      motivoAf: String(r[19] || '').trim(),
+    });
+  }
+  S.colaboradores = [...map.values()];
+}
+
+function atualizarRenomearFTBadge() {
+  const badge = document.getElementById('renomearFTBadge');
+  if (!badge) return;
+  const area  = document.getElementById('upRenomear');
+  const icon  = document.getElementById('upRenomearIcon');
+  const txt   = document.getElementById('upRenomearText');
+  const hint  = document.getElementById('upRenomearHint');
+  if (S.colaboradores.length) {
+    badge.textContent = S.colaboradores.length + ' colaboradores';
+    badge.className = 'badge b-green';
+    // Desbloqueia a área de upload
+    if (area) {
+      area.classList.remove('disabled');
+      if (icon) icon.textContent = '📎';
+      if (txt)  txt.textContent  = 'Clique ou arraste os comprovantes de pagamento';
+      if (hint) hint.textContent = 'PDF, JPG, PNG — múltiplos arquivos aceitos de uma vez';
+    }
+  } else {
+    badge.textContent = 'não carregada';
+    badge.className = 'badge b-gray';
+    // Bloqueia a área de upload
+    if (area) {
+      area.classList.add('disabled');
+      if (icon) icon.textContent = '🔒';
+      if (txt)  txt.textContent  = 'Carregue a planilha de colaboradores primeiro';
+      if (hint) hint.textContent = 'O arquivo XLSX é necessário para identificar os comprovantes';
+    }
+  }
+}
+
+function atualizarZipUI() {
+  const info = document.getElementById('zipInfo');
+  if (!S.zip.loaded) { info.style.display = 'none'; return; }
+  info.style.display = '';
+  document.getElementById('zipFileName').textContent = S.zip.fileName;
+  const nP = Object.keys(S.zip.foldersMap).length;
+  document.getElementById('zipBadgePastas').textContent = nP + ' pastas';
+  document.getElementById('zipBadgeArqs').textContent = S.zip.allFiles.length + ' arquivos';
+  document.getElementById('zipBadgeColabs').textContent = S.colaboradores.length + ' colaboradores';
+  const ci = document.getElementById('colabContratoInfo');
+  if (ci) ci.textContent = S.contratoSel
+    ? 'Contrato ' + S.contratoSel + ' · ' + S.colaboradores.length + ' colaboradores' : '';
+}
+
+function onContratoChange() {
+  S.contratoSel = document.getElementById('contratoSel').value;
+  if (S.zip.workbook) extrairColaboradores(S.zip.workbook, S.contratoSel);
+  atualizarZipUI();
+  renderColabs();
+}
+
+// Fuzzy folder match — handles accents, upper/lower case differences
+function getFilesFromFolder(folderName) {
+  const nTarget = norm(folderName);
+  const fm = S.zip.foldersMap;
+  if (fm[folderName]) return fm[folderName];
+  for (const key of Object.keys(fm)) {
+    if (norm(key) === nTarget) return fm[key];
+  }
+  for (const key of Object.keys(fm)) {
+    const nKey = norm(key);
+    if (nKey.includes(nTarget) || nTarget.includes(nKey)) return fm[key];
+  }
+  // Fallback: root-level files (e.g. Força de Trabalho xlsx at root)
+  return fm['__root__'] || [];
+}
+
+// ─── TAB 2: ANÁLISE DE PASTAS ─────────────────────────────────────────────────
+
+function analyzePastas() {
+  const result = document.getElementById('pastasResult');
+  if (!S.zip.loaded) {
+    result.innerHTML = '<div class="empty"><div class="empty-icon">📦</div><div class="empty-text">Carregue o ZIP do SharePoint para ver o resultado</div></div>';
+    return;
+  }
+  let html = '';
+  PASTA_CHECKS.forEach(grupo => {
+    const files = getFilesFromFolder(grupo.pasta);
+    const normFiles = files.map(f => norm(f));
+    let grupoOk = 0, rows = '';
+    grupo.docs.forEach(doc => {
+      let found = false, fname = null, info = '';
+      if (doc.checkSubfolder) {
+        // Check that a specific subfolder exists and has files
+        const sub = getFilesFromFolder(doc.checkSubfolder);
+        found = sub.length > 0;
+        if (found) info = sub.length + ' arquivos';
+      } else if (!doc.kw || doc.kw.length === 0) {
+        // Any file in the folder is enough (e.g. Ponto — named by employee)
+        found = files.length > 0;
+        if (found) info = files.length + ' arquivos';
+      } else {
+        // Keyword search within folder files
+        const fi = normFiles.findIndex(f => doc.kw.some(kw => f.includes(norm(kw))));
+        found = fi >= 0;
+        fname = fi >= 0 ? files[fi] : null;
+      }
+      if (found) grupoOk++;
+      const badge = found
+        ? '<span class="badge b-green">✓ OK</span>'
+        : '<span class="badge b-red">✗ Faltando</span>';
+      const detail = fname ? '<span class="dr-file" title="' + fname + '">' + fname + '</span>'
+                   : info  ? '<span class="dr-file">' + info + '</span>' : '';
+      rows += '<div class="doc-row"><span class="dr-name">' + doc.nome + '</span>' + detail + badge + '</div>';
+    });
+    const allOk = grupoOk === grupo.docs.length;
+    const groupBadge = allOk
+      ? '<span class="badge b-green">✓ Completo</span>'
+      : grupoOk > 0 ? '<span class="badge b-amber">Parcial</span>'
+      : '<span class="badge b-red">Faltando</span>';
+    html += `
+      <div class="folder-group">
+        <div class="folder-hdr" onclick="this.nextElementSibling.classList.toggle('open');this.querySelector('.f-arrow').classList.toggle('open')">
+          <span class="f-icon">${grupo.ico}</span>
+          <span class="f-name">${grupo.pasta}</span>
+          ${groupBadge}
+          <span class="f-prog">${grupoOk}/${grupo.docs.length}</span>
+          <span class="f-arrow">▶</span>
+        </div>
+        <div class="folder-body">${rows}</div>
+      </div>`;
+  });
+  result.innerHTML = html;
+}
+
+function exportPastasReport() {
+  if (!S.zip.loaded) { toast('Carregue o ZIP primeiro'); return; }
+  let lines = [
+    'RELATÓRIO DE PASTAS — ENERGISA',
+    'Competência: ' + MESES[S.comp.mes] + '/' + S.comp.ano,
+    'ZIP: ' + S.zip.fileName,
+    'Gerado: ' + new Date().toLocaleString('pt-BR'),
+    '='.repeat(55), ''
+  ];
+  PASTA_CHECKS.forEach(grupo => {
+    const files = getFilesFromFolder(grupo.pasta);
+    const normFiles = files.map(f => norm(f));
+    lines.push('[' + grupo.pasta + ']');
+    grupo.docs.forEach(doc => {
+      let found = false;
+      if (doc.checkSubfolder) {
+        found = getFilesFromFolder(doc.checkSubfolder).length > 0;
+      } else if (!doc.kw || doc.kw.length === 0) {
+        found = files.length > 0;
+      } else {
+        found = normFiles.some(f => doc.kw.some(kw => f.includes(norm(kw))));
+      }
+      lines.push('  ' + (found ? '[OK]' : '[--]') + ' ' + doc.nome);
+    });
+    lines.push('');
+  });
+  download(lines.join('\n'), 'pastas_energisa_' + compKey() + '.txt', 'text/plain');
+  toast('Relatório exportado!');
+}
+
+// ─── TAB 3: COLABORADORES ─────────────────────────────────────────────────────
+
+function requiredDocs(colab) {
+  // Comprovante de pagamento e ponto são obrigatórios para todos
+  const docs = ['comprovante', 'ponto'];
+  // Férias: colaborador inativo com motivo contendo "férias"
+  if (colab.situacao === 'I' && colab.motivoAf && norm(colab.motivoAf).includes('fer')) {
+    docs.push('ferias');
+  }
+  // TRCT: data de demissão cai no mês/ano da competência atual
+  if (colab.dataDem) {
+    const parts = colab.dataDem.split('/');
+    if (parts.length === 3) {
+      const m = +parts[1], a = +parts[2];
+      if (m === S.comp.mes && a === S.comp.ano) docs.push('trct');
+    }
+  }
+  return docs;
+}
+
+function findFile(colab, docType) {
+  const THRESHOLD = 0.35;
+  const dt = DOC_TYPES[docType];
+  if (!dt) return null;
+  // Get files from the specific folder for this doc type
+  const files = getFilesFromFolder(dt.folder);
+  if (!files.length) return null;
+  let best = null, bestScore = 0;
+  for (const arq of files) {
+    const n = norm(arq);
+    // If keywords defined, at least one must appear in the filename
+    if (dt.kw.length > 0 && !dt.kw.some(kw => n.includes(norm(kw)))) continue;
+    const sc = nameScore(colab.nome, n);
+    if (sc >= THRESHOLD && sc > bestScore) { bestScore = sc; best = arq; }
+  }
+  // Fallback for no-keyword types: match only by name
+  if (!best && dt.kw.length === 0) {
+    for (const arq of files) {
+      const sc = nameScore(colab.nome, norm(arq));
+      if (sc >= THRESHOLD && sc > bestScore) { bestScore = sc; best = arq; }
+    }
+  }
+  return best ? { file: best, score: bestScore } : null;
+}
+
+function initFilters() {
+  document.querySelectorAll('.f-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.f-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      S.filter = btn.dataset.filter;
+      renderColabs();
+    });
+  });
+  document.getElementById('colabSearch').addEventListener('input', renderColabs);
+}
+
+function renderColabs() {
+  const container = document.getElementById('colabContainer');
+  if (!S.zip.loaded || !S.colaboradores.length) {
+    container.innerHTML = '<div class="empty"><div class="empty-icon">📦</div><div class="empty-text">Carregue o ZIP na aba "Verificador de Pastas" para ver os colaboradores</div></div>';
+    return;
+  }
+  const searchEl = document.getElementById('colabSearch');
+  const search = norm(searchEl ? searchEl.value : '');
+  let list = S.colaboradores;
+  if (S.filter === 'ativos') list = list.filter(c => c.situacao === 'A');
+  if (search) list = list.filter(c => norm(c.nome).includes(search));
+
+  const items = list.map(colab => {
+    const dts = requiredDocs(colab);
+    const docs = dts.map(dt => ({
+      type: dt,
+      label: DOC_TYPES[dt] ? DOC_TYPES[dt].label : dt,
+      match: findFile(colab, dt)
+    }));
+    const found = docs.filter(d => d.match).length;
+    const pct = docs.length ? Math.round(found / docs.length * 100) : 0;
+    return { colab, docs, found, total: docs.length, pct };
+  });
+
+  let filtered = items;
+  if (S.filter === 'pendencia') filtered = items.filter(i => i.pct < 100);
+  else if (S.filter === 'completos') filtered = items.filter(i => i.pct === 100);
+
+  if (!filtered.length) {
+    container.innerHTML = '<div class="empty"><div class="empty-icon">🔍</div><div class="empty-text">Nenhum colaborador encontrado com esse filtro</div></div>';
+    return;
+  }
+
+  container.innerHTML = filtered.map((item, idx) => {
+    const { colab, docs, found, total, pct } = item;
+    const isAtivo = colab.situacao === 'A';
+    const avColor = isAtivo ? 'var(--blue)' : 'var(--gray-400)';
+    const fillColor = pct === 100 ? 'var(--green)' : pct > 0 ? 'var(--amber)' : 'var(--red)';
+    const situBadge = isAtivo
+      ? '<span class="badge b-green">Ativo</span>'
+      : '<span class="badge b-gray">Inativo</span>';
+    const statusBadge = pct === 100
+      ? '<span class="badge b-green">✓ OK</span>'
+      : pct > 0 ? '<span class="badge b-amber">' + found + '/' + total + '</span>'
+      : '<span class="badge b-red">Pendente</span>';
+    const docRows = docs.map(doc => {
+      const st = doc.match
+        ? '<span class="badge b-green">✓</span>'
+        : '<span class="badge b-red">✗ Faltando</span>';
+      const fn = doc.match
+        ? '<span class="dr-file" title="' + doc.match.file + '">' + doc.match.file + '</span>' : '';
+      return '<div class="doc-row"><span class="dr-name">' + doc.label + '</span>' + fn + st + '</div>';
+    }).join('');
+    return `
+      <div class="colab-card">
+        <div class="colab-hdr" onclick="toggleColab(${idx})">
+          <div class="avatar" style="background:${avColor}">${initials(colab.nome)}</div>
+          <div class="colab-info">
+            <div class="colab-name">${colab.nome}</div>
+            <div class="colab-meta">${colab.funcao || '—'}${colab.afastado ? ' · Afastado' : ''}</div>
+          </div>
+          ${situBadge}
+          <div class="mini-prog"><div class="mini-fill" style="width:${pct}%;background:${fillColor}"></div></div>
+          ${statusBadge}
+          <span style="color:var(--gray-400);font-size:10px;flex-shrink:0">▶</span>
+        </div>
+        <div class="colab-body" id="cb-${idx}">
+          ${docRows || '<p style="color:var(--gray-400);font-size:12px;padding:6px 0">Nenhum documento necessário identificado.</p>'}
+          <div class="colab-footer">
+            Admissão: ${colab.dataAdm || '—'}
+            ${colab.dataDem ? ' · Demissão: ' + colab.dataDem : ''}
+            ${colab.motivoAf ? ' · ' + colab.motivoAf : ''}
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function toggleColab(idx) {
+  document.getElementById('cb-'+idx).classList.toggle('open');
+}
+
+function exportColabReport() {
+  if (!S.zip.loaded || !S.colaboradores.length) { toast('Carregue o ZIP primeiro'); return; }
+  const pendentes = [], completos = [];
+  S.colaboradores.forEach(colab => {
+    const docs = requiredDocs(colab).map(dt => ({
+      label: DOC_TYPES[dt] ? DOC_TYPES[dt].label : dt,
+      match: findFile(colab, dt)
+    }));
+    const missing = docs.filter(d => !d.match);
+    if (!missing.length) completos.push(colab.nome);
+    else pendentes.push({ colab, missing });
+  });
+  let lines = [
+    'RELATÓRIO POR COLABORADOR — ENERGISA',
+    'Competência: ' + MESES[S.comp.mes] + '/' + S.comp.ano,
+    'Contrato: ' + S.contratoSel,
+    'ZIP: ' + S.zip.fileName,
+    'Gerado: ' + new Date().toLocaleString('pt-BR'),
+    'Total: ' + S.colaboradores.length + ' colaboradores',
+    '='.repeat(55), '',
+    'PENDÊNCIAS (' + pendentes.length + '):', '-'.repeat(55)
+  ];
+  pendentes.forEach(({ colab, missing }) => {
+    lines.push('\n' + colab.nome + ' [' + (colab.situacao === 'A' ? 'Ativo' : 'Inativo') + ']');
+    missing.forEach(d => lines.push('  ✗ ' + d.label));
+  });
+  lines.push('', 'COMPLETOS (' + completos.length + '):', '-'.repeat(55));
+  completos.forEach(n => lines.push('  ✓ ' + n));
+  download(lines.join('\n'), 'colabs_energisa_' + compKey() + '.txt', 'text/plain');
+  toast('Relatório exportado!');
+}
+
+// ─── TAB 4: RENOMEAR COMPROVANTES ────────────────────────────────────────────
+
+// Verifica se uma string parece um nome de pessoa
+// (2+ palavras, só letras, sem números)
+function pareceNomePessoa(str) {
+  if (!str || str.length < 5 || str.length > 80) return false;
+  const words = str.trim().split(/\s+/);
+  if (words.length < 2) return false;
+  return words.every(w => w.length >= 2 && /^[A-Za-zÀ-üÇç]+$/.test(w));
+}
+
+// Carrega colaboradores de qualquer planilha que tenha coluna "Colaborador".
+// Coluna "Contrato" é opcional — se existir, permite filtrar por contrato.
+// Retorna: { count, erro } — erro é string se coluna obrigatória não encontrada.
+function lerColaboradoresDePlanilha(wb) {
+  const sheet = wb.Sheets[wb.SheetNames[0]];
+  const rows  = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+  if (rows.length < 2) return { count: 0, erro: 'Planilha vazia ou sem dados.' };
+
+  // ── Localiza colunas pelo cabeçalho ─────────────────────────────────────
+  const header = rows[0].map(h => norm(String(h || '')));
+  const colColab    = header.findIndex(h => h === 'colaborador');
+  const colContrato = header.findIndex(h => h === 'contrato');
+  const colSalario  = header.findIndex(h => h === 'salario' || h === 'salario base' || h === 'sal' || h === 'vencimento');
+
+  if (colColab < 0) {
+    return { count: 0, erro: 'Coluna "Colaborador" não encontrada. Verifique o cabeçalho da planilha.' };
+  }
+
+  // ── Extrai nomes (e contratos + salário, se disponível) ─────────────────
+  const seen = new Set();
+  S.colaboradores = [];
+  for (let i = 1; i < rows.length; i++) {
+    const r    = rows[i];
+    const nome = String(r[colColab] || '').trim().toUpperCase();
+    if (!nome || seen.has(nome) || !pareceNomePessoa(nome)) continue;
+    seen.add(nome);
+    const contrato = colContrato >= 0 ? String(r[colContrato] || '').trim() : '';
+    const salario  = colSalario  >= 0 ? parseSalary(r[colSalario]) : null;
+    S.colaboradores.push({
+      nome, empresa: '', contrato, salario, situacao: 'A',
+      funcao: '', anoComp: '', mesComp: '',
+      dataAdm: '', dataDem: '', afastado: false, motivoAf: '',
+    });
+  }
+  return { count: S.colaboradores.length };
+}
+
+// ── Converte valor de célula Excel ou string para número ──────────────────
+function parseSalary(raw) {
+  if (raw === null || raw === undefined || raw === '') return null;
+  if (typeof raw === 'number') return isNaN(raw) ? null : Math.abs(raw);
+  let s = String(raw).replace(/R\$\s*/gi, '').replace(/\s/g, '');
+  // Formato BR: 1.234,56 → remove pontos (milhar) e troca vírgula por ponto
+  if (/\d\.\d{3},/.test(s))      s = s.replace(/\./g, '').replace(',', '.');
+  else if (/,\d{2}$/.test(s))    s = s.replace(',', '.');
+  const n = parseFloat(s);
+  return isNaN(n) ? null : Math.abs(n);
+}
+
+// ── Extrai valor monetário do texto do comprovante ────────────────────────
+function extractValueFromText(text) {
+  if (!text) return null;
+  const t = text.replace(/[\r\n\t]+/g, ' ').replace(/\s{2,}/g, ' ');
+
+  // Padrões com rótulo específico — R$ é opcional (PDF.js às vezes não decodifica o símbolo)
+  const labeled = [
+    /valor\s+(?:da\s+)?transfer[eê]ncia\s*[:\-]?\s*R?\$?\s*([\d.,]+)/i,
+    /valor\s+cr[eé]ditado\s*[:\-]?\s*R?\$?\s*([\d.,]+)/i,
+    /valor\s+(?:total\s+)?pago\s*[:\-]?\s*R?\$?\s*([\d.,]+)/i,
+    /total\s+(?:a\s+)?pag[ao]r?\s*[:\-]?\s*R?\$?\s*([\d.,]+)/i,
+    /total\s+credit[ao]\s*[:\-]?\s*R?\$?\s*([\d.,]+)/i,
+    /quantia\s*[:\-]?\s*R?\$?\s*([\d.,]+)/i,
+    /cr[eé]dit[ao]\s+em\s+conta\s*[:\-]?\s*R?\$?\s*([\d.,]+)/i,
+    /l[ií]quido\s*[:\-]?\s*R?\$?\s*([\d.,]+)/i,   // líquido / liquido
+    /\bvalor\b\s*[:\-]?\s*R?\$?\s*([\d.,]+)/i,    // "Valor: R$ X" ou "Valor: X"
+    /\btotal\b\s*[:\-]?\s*R?\$?\s*([\d.,]+)/i,
+  ];
+
+  const inRange = v => v !== null && v >= 200 && v <= 80000;
+
+  for (const re of labeled) {
+    const m = t.match(re);
+    if (!m) continue;
+    const val = parseSalary(m[1]);
+    if (inRange(val)) return val;
+  }
+
+  // Fallback: pega TODOS os valores com "R$" e retorna o maior na faixa salarial
+  // (evita pegar tarifa R$ 0,00 em vez do salário R$ 3.068,50)
+  const allRs = [...t.matchAll(/R\$\s*([\d.,]+)/g)]
+    .map(m => parseSalary(m[1]))
+    .filter(inRange);
+  if (allRs.length) return Math.max(...allRs);
+
+  // Último recurso: número no formato brasileiro sem símbolo — ex: "3.068,50"
+  const allBR = [...t.matchAll(/\b(\d{1,3}(?:\.\d{3})+,\d{2})\b/g)]
+    .map(m => parseSalary(m[1]))
+    .filter(inRange);
+  if (allBR.length) return Math.max(...allBR);
+
+  return null;
+}
+
+// ── Formata número como moeda BR ──────────────────────────────────────────
+function fmtBRL(n) {
+  if (n === null || n === undefined || isNaN(n)) return '—';
+  return 'R$ ' + n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+// ── Badge de comparação de valor com salário da planilha ──────────────────
+function makeSalaryBadge(item) {
+  if (item.status === 'reading') return '<span class="badge b-gray" style="font-size:10px">🔍</span>';
+  const val = item.extractedValue;
+  if (val === null || val === undefined)
+    return '<span style="color:var(--gray-400);font-size:11px">—</span>';
+  const colab = S.colaboradores.find(c => c.nome === item.colabName);
+  const sal   = colab ? colab.salario : null;
+  if (sal === null || sal === undefined) {
+    // Valor encontrado mas sem salário na planilha para comparar
+    return '<span class="badge b-gray" style="font-size:10px;font-variant-numeric:tabular-nums">' + fmtBRL(val) + '</span>';
+  }
+  const diff = Math.abs(val - sal) / sal;
+  if (diff <= 0.015) {   // tolerância de 1,5% (descontos pequenos)
+    return '<span class="badge b-green" style="font-size:10px;font-variant-numeric:tabular-nums" title="Esperado: ' + fmtBRL(sal) + '">✓ ' + fmtBRL(val) + '</span>';
+  }
+  return '<span class="badge b-red" style="font-size:10px;font-variant-numeric:tabular-nums" title="Esperado: ' + fmtBRL(sal) + '">⚠ ' + fmtBRL(val) + '</span>';
+}
+
+function initRenomear() {
+  // Configura worker do PDF.js (extração de texto de PDFs)
+  if (typeof pdfjsLib !== 'undefined') {
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  }
+
+  // Upload direto da planilha Força de Trabalho (sem precisar do ZIP inteiro)
+  const ftInp = document.getElementById('fpFT');
+  if (ftInp) {
+    ftInp.addEventListener('change', async () => {
+      const file = ftInp.files[0];
+      if (!file) return;
+      try {
+        const ab = await file.arrayBuffer();
+        const wb = XLSX.read(ab, { type: 'array' });
+        const { count, erro } = lerColaboradoresDePlanilha(wb);
+        if (erro) { toast('✗ ' + erro); ftInp.value = ''; return; }
+        atualizarRenomearFTBadge();
+        const dl = document.getElementById('dlColabs');
+        if (dl) dl.innerHTML = S.colaboradores.map(c => '<option value="' + c.nome + '">').join('');
+        if (count > 0) {
+          toast('✓ ' + count + ' colaboradores carregados');
+          // Re-avaliar badges de valor para arquivos já na tabela
+          if (S.renomear.length) {
+            S.renomear.forEach((item, idx) => updateRenomearRowFull(idx));
+          }
+        } else {
+          toast('⚠ Nenhum nome encontrado na planilha');
+        }
+      } catch(e) {
+        toast('✗ Erro ao ler a planilha: ' + e.message);
+      }
+      ftInp.value = '';
+    });
+  }
+
+  const inp = document.getElementById('fpRenomear');
+  inp.addEventListener('change', () => {
+    if (!S.colaboradores.length) { toast('⚠ Carregue a planilha de colaboradores antes de adicionar comprovantes'); inp.value = ''; return; }
+    if (inp.files.length) loadComprovantes(Array.from(inp.files));
+    inp.value = '';
+  });
+  const area = document.getElementById('upRenomear');
+  area.addEventListener('dragover', e => {
+    if (area.classList.contains('disabled')) return;
+    e.preventDefault(); area.classList.add('over');
+  });
+  area.addEventListener('dragleave', () => area.classList.remove('over'));
+  area.addEventListener('drop', e => {
+    e.preventDefault(); area.classList.remove('over');
+    if (!S.colaboradores.length) { toast('⚠ Carregue a planilha de colaboradores antes de adicionar comprovantes'); return; }
+    if (e.dataTransfer.files.length) loadComprovantes(Array.from(e.dataTransfer.files));
+  });
+}
+
+function loadComprovantes(files) {
+  const hint = document.getElementById('renomearHint');
+  if (hint) hint.style.display = S.colaboradores.length ? 'none' : '';
+
+  const newItems = [];
+  for (const file of files) {
+    if (S.renomear.some(r => r.file.name === file.name && r.file.size === file.size)) continue;
+
+    // ── Pré-preenchimento IMEDIATO pelo nome do arquivo ────────────────────────
+    // Ex: "FABIO MARTINS DE LIMA 03.PDF" → "FABIO MARTINS DE LIMA" (antes do OCR)
+    // O processFile atualiza depois se encontrar algo melhor no conteúdo
+    const preNomeArq  = extractNameFromFilename(file.name);
+    const preColab    = preNomeArq ? matchNameAgainstColabs(preNomeArq) : null;
+    const preNome     = preColab ? preColab.nome : (preNomeArq || '');
+
+    const item = {
+      file,
+      colabName:    preNome,
+      auto:         !!preNome,
+      fromDoc:      false,
+      fromFilename: !!preNome && !preColab,   // nome veio do arquivo, não validado na lista
+      score:        preNome ? 0.7 : 0,
+      status:       'reading',
+      extractedText: '',
+    };
+    S.renomear.push(item);
+    newItems.push(item);
+  }
+  renderRenomear();
+  // Processa cada arquivo assincronamente (OCR / extração de texto)
+  // Pode atualizar para nome encontrado DENTRO do documento (badge 📄)
+  newItems.forEach(item => processFile(item));
+}
+
+function autoMatchComprovante(fileName) {
+  if (!S.colaboradores.length) return null;
+  const THRESHOLD = 0.35;
+  let best = null, bestScore = 0;
+  for (const colab of S.colaboradores) {
+    const sc = nameScore(colab.nome, fileName);
+    if (sc >= THRESHOLD && sc > bestScore) { bestScore = sc; best = { nome: colab.nome, score: sc }; }
+  }
+  return best;
+}
+
+// Busca nome do colaborador dentro do TEXTO extraído do documento.
+// Exige PELO MENOS 2 partes do nome encontradas (nome + sobrenome)
+// para evitar match errado por sobrenome comum ("SILVA", "OLIVEIRA", etc.)
+function autoMatchFromText(text) {
+  if (!S.colaboradores.length || !text.trim()) return null;
+  const THRESHOLD = 0.35;
+  let best = null, bestScore = 0;
+  const normText = norm(text);
+  for (const colab of S.colaboradores) {
+    const parts = nameParts(colab.nome);
+    if (!parts.length) continue;
+    const found = parts.filter(p => normText.includes(p));
+
+    // Exige nome + sobrenome: mínimo 2 partes encontradas
+    // (ou 100% se o nome tiver só 2 partes)
+    const minRequired = Math.min(2, parts.length);
+    if (found.length < minRequired) continue;
+
+    const sc = found.length / parts.length;
+    if (sc >= THRESHOLD && sc > bestScore) { bestScore = sc; best = { nome: colab.nome, score: sc }; }
+  }
+  return best;
+}
+
+// Extrai nome do DESTINATÁRIO de comprovantes de pagamento (PIX, TED, etc.)
+// Funciona sem a lista de colaboradores carregada
+function extractNameFromText(text) {
+  if (!text || text.length < 10) return null;
+  // Normaliza quebras e espaços múltiplos
+  const t = text.replace(/[\r\n\t]+/g, ' ').replace(/\s{2,}/g, ' ');
+
+  const patterns = [
+    // Banco Inter PIX: "Quem recebeu ... Nome [name] CPF/Institui"
+    /quem\s+recebeu\b.{0,200}?\bnom[e:]?\s+([A-Za-zÀ-ü][A-Za-zÀ-ü '.-]{3,60}?)(?:\s+CPF|\s+Institu|\s+Banco|\s*$)/i,
+    // BB / genérico "Favorecido: [name]"
+    /favorecido\s*[:\-]?\s*([A-Za-zÀ-ü][A-Za-zÀ-ü '.-]{3,60}?)(?:\s+CPF|\s+Banco|\s+Agên|\s*$)/i,
+    // Bradesco / Sicoob "Beneficiário: [name]"
+    /benefici[aá]rio\s*[:\-]?\s*([A-Za-zÀ-ü][A-Za-zÀ-ü '.-]{3,60}?)(?:\s+CPF|\s+Banco|\s+Agên|\s*$)/i,
+    // Caixa / Santander "Recebido por [name]"
+    /recebido\s+por\s+([A-Za-zÀ-ü][A-Za-zÀ-ü '.-]{3,60}?)(?:\s+CPF|\s+Banco|\s*$)/i,
+    // Nubank / Itaú "Para [name]"
+    /\bpara\b\s+([A-Za-zÀ-ü][A-Za-zÀ-ü '.-]{3,60}?)(?:\s+CPF|\s+Banco|\s+Chave|\s*$)/i,
+    // Genérico "Crédito em nome de [name]"
+    /cr[eé]dito\s+em\s+nome\s+de\s+([A-Za-zÀ-ü][A-Za-zÀ-ü '.-]{3,60}?)(?:\s+CPF|\s+Banco|\s*$)/i,
+  ];
+
+  for (const re of patterns) {
+    const m = t.match(re);
+    if (!m || !m[1]) continue;
+    const name = m[1].trim();
+    if (name.length < 5) continue;
+    if (/^\d/.test(name)) continue;          // começa com número
+    // Descarta nomes de empresas (pagador / emissor)
+    if (/(ltda|eireli|s\.?a\.?|\bme\b|\bepp\b|cnpj|empresa|machado|gomes|energisa|digital)/i.test(name)) continue;
+    return name;
+  }
+  return null;
+}
+
+// Extrai nome de pessoa do próprio nome do arquivo (ex: "FABIO MARTINS 03.PDF" → "FABIO MARTINS")
+function extractNameFromFilename(filename) {
+  // Remove extensão
+  let name = filename.replace(/\.[^.]+$/, '').trim();
+  // Remove sufixo de mês/ano: " 03", " 3", " 02-2026", " 2026" no final
+  name = name.replace(/[\s_-]+\d{1,2}[-_]?\d{0,4}$/, '').trim();
+  name = name.replace(/[\s_-]+20\d{2}$/, '').trim();
+  // Substitui _ e - por espaço
+  name = name.replace(/[_-]/g, ' ').replace(/\s{2,}/g, ' ').trim();
+  // Deve ter pelo menos 5 chars e pelo menos 2 palavras
+  if (name.length < 5) return null;
+  const words = name.split(/\s+/).filter(w => w.length > 1);
+  if (words.length < 2) return null;
+  // Descarta se parece código (A2, B3, IMG001...)
+  if (/^[A-Z]{1,2}\d+$/.test(name)) return null;
+  if (/^\d/.test(name)) return null;
+  // Descarta nomes genéricos de documentos
+  if (/(comprovante|pagamento|recibo|extrato|boleto|nota|fiscal|nf|holerite)/i.test(words[0])) return null;
+  return name.toUpperCase();
+}
+
+// Varre o texto livre buscando qualquer sequência que pareça um nome de pessoa
+// e tenta validar contra a lista de colaboradores.
+// Isso resolve o problema do layout de 2 colunas do Inter onde os rótulos e
+// valores são extraídos em ordens imprevisíveis.
+function findPersonNameInText(text) {
+  if (!text || text.length < 10) return null;
+
+  // Normaliza o texto
+  const t = text.replace(/[\r\n\t]+/g, ' ').replace(/\s{2,}/g, ' ');
+
+  // 1) Se tiver colaboradores carregados (ZIP), busca direto: qualquer parte do
+  //    nome que apareça no texto é suficiente (autoMatchFromText já faz isso,
+  //    mas aqui garantimos que mesmo com texto fora de ordem funcione)
+  const byColabs = autoMatchFromText(text);
+  if (byColabs) return { nome: byColabs.nome, score: byColabs.score, fromDoc: true };
+
+  // 2) Sem ZIP: procura sequências de 2-5 palavras em maiúscula que parecem
+  //    um nome de pessoa (exclui termos de documentos e nomes de empresas)
+  const BLOCKLIST = /\b(PIX|TED|DOC|CNPJ|CPF|FGTS|DARF|LTDA|EIRELI|S\.?A\.?|MEI|BANCO|INTER|BRADESCO|ITAU|CAIXA|BB|CEF|NUBANK|DIGITAL|PAGAMENTO|COMPROVANTE|RECIBO|ENVIADO|TRANSACAO|SOBRE|QUEM|PAGOU|RECEBEU|HORARIO|DATA|VALOR|NOME|INST[IU]|AGENCIA|CONTA)\b/i;
+
+  // Tokeniza em palavras e encontra "runs" de palavras que não sejam bloqueadas
+  const tokens = t.split(/\s+/);
+  let runs = [], cur = [];
+  for (const tok of tokens) {
+    const clean = tok.replace(/[^A-Za-zÀ-ü]/g, '');
+    if (clean.length >= 2 && !BLOCKLIST.test(clean)) {
+      cur.push(clean.toUpperCase());
+    } else {
+      if (cur.length >= 2) runs.push(cur.join(' '));
+      cur = [];
+    }
+  }
+  if (cur.length >= 2) runs.push(cur.join(' '));
+
+  // Filtra por comprimento e tamanho (nomes têm 2-5 palavras)
+  const candidates = runs.filter(r => {
+    const words = r.split(' ');
+    return words.length >= 2 && words.length <= 5 && r.length >= 8 && r.length <= 60;
+  });
+
+  if (!candidates.length) return null;
+
+  // Sem ZIP: retorna o primeiro candidato plausível
+  const nome = candidates[0];
+  return { nome, score: 0.65, fromDoc: true };
+}
+
+// Valida nome extraído do documento contra a lista de colaboradores (forma canônica)
+function matchNameAgainstColabs(extractedName) {
+  if (!S.colaboradores.length || !extractedName) return null;
+  const THRESHOLD = 0.4;
+  let best = null, bestScore = 0;
+  const normExtracted = norm(extractedName);
+  for (const colab of S.colaboradores) {
+    const parts = nameParts(colab.nome);
+    if (!parts.length) continue;
+    const found = parts.filter(p => normExtracted.includes(p));
+
+    // Exige nome + sobrenome: mínimo 2 partes encontradas
+    const minRequired = Math.min(2, parts.length);
+    if (found.length < minRequired) continue;
+
+    const sc = found.length / parts.length;
+    if (sc >= THRESHOLD && sc > bestScore) { bestScore = sc; best = { nome: colab.nome, score: sc }; }
+  }
+  return best;
+}
+
+// ── Extração de texto ─────────────────────────────────────────────────────────
+
+async function extractTextFromFile(file) {
+  const ext = extOf(file.name);
+  try {
+    if (ext === '.pdf' && typeof pdfjsLib !== 'undefined') {
+      return await extractTextFromPDF(file);
+    }
+    if (typeof Tesseract !== 'undefined') {
+      return await extractTextFromImage(file);
+    }
+  } catch(e) { console.warn('Extração falhou:', file.name, e); }
+  return '';
+}
+
+async function extractTextFromPDF(file) {
+  const ab  = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(ab) }).promise;
+  let text  = '';
+  const pages = Math.min(pdf.numPages, 3);
+  for (let p = 1; p <= pages; p++) {
+    const page    = await pdf.getPage(p);
+    const content = await page.getTextContent();
+    // Agrupa itens por linha (y-position) para reconstruir leitura natural
+    // Isso corrige PDFs com layout de 2 colunas (ex: comprovantes Inter)
+    const rows = [];
+    for (const item of content.items) {
+      if (!item.str || !item.str.trim()) continue;
+      const y = Math.round((item.transform[5] || 0) / 4) * 4; // quantiza 4px
+      let row = rows.find(r => r.y === y);
+      if (!row) { row = { y, items: [] }; rows.push(row); }
+      row.items.push({ x: item.transform[4] || 0, str: item.str });
+    }
+    rows.sort((a, b) => b.y - a.y);                           // y decrescente (PDF origin = bottom)
+    rows.forEach(r => r.items.sort((a, b) => a.x - b.x));     // x crescente (esquerda → direita)
+    text += rows.map(r => r.items.map(i => i.str).join(' ')).join('\n') + '\n';
+  }
+  // Sem texto embutido → OCR via canvas (PDFs de imagem / escaneados)
+  if (!text.trim() && typeof Tesseract !== 'undefined') {
+    const page     = await pdf.getPage(1);
+    const viewport = page.getViewport({ scale: 3 }); // escala 3 = mais resolução para OCR
+    const canvas   = document.createElement('canvas');
+    canvas.width   = viewport.width;
+    canvas.height  = viewport.height;
+    await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+    const res = await Tesseract.recognize(canvas, 'por+eng');
+    text = res.data.text;
+  }
+  return text;
+}
+
+async function extractTextFromImage(file) {
+  const res = await Tesseract.recognize(file, 'por+eng');
+  return res.data.text;
+}
+
+// ── Processamento assíncrono de cada arquivo ───────────────────────────────────
+
+async function processFile(item) {
+  try {
+    const text         = await extractTextFromFile(item.file);
+    item.extractedText = text;
+    item.status        = 'done';
+    item.extractedValue = extractValueFromText(text);
+
+    let best = null;
+
+    // ── PASSO 1: Lista de colaboradores (prioridade máxima quando ZIP carregado) ──
+    // Varre o texto extraído procurando o nome de cada colaborador da lista.
+    // Funciona independente da ordem das colunas ou do formato do banco.
+    if (S.colaboradores.length && text.trim()) {
+      const byList = autoMatchFromText(text);
+      if (byList) best = { nome: byList.nome, score: byList.score, fromDoc: true };
+    }
+
+    // ── PASSO 2: Padrões estruturados (Inter "Quem recebeu", Bradesco, etc.) ──
+    // Útil quando ZIP não está carregado
+    if (!best) {
+      const docName = extractNameFromText(text);
+      if (docName) {
+        const colabMatch = matchNameAgainstColabs(docName);
+        best = colabMatch
+          ? { nome: colabMatch.nome, score: colabMatch.score, fromDoc: true }
+          : { nome: docName.toUpperCase().trim(), score: 0.85, fromDoc: true };
+      }
+    }
+
+    // ── PASSO 3: Varredura livre — qualquer sequência nome-like no texto ──
+    if (!best && text.trim()) {
+      const byFree = findPersonNameInText(text);
+      if (byFree) best = byFree;
+    }
+
+    // ── PASSO 4: Nome do arquivo como fonte do documento ──
+    // O pré-preenchimento em loadComprovantes já garantiu isso,
+    // mas aqui tentamos validar/melhorar via lista de colaboradores
+    if (!best) {
+      const byName = autoMatchComprovante(item.file.name);
+      if (byName) best = { nome: byName.nome, score: byName.score, fromDoc: false };
+    }
+
+    // Só atualiza se encontrou algo com score MELHOR que o pré-preenchimento
+    if (best && best.score > item.score) {
+      item.colabName    = best.nome;
+      item.auto         = true;
+      item.score        = best.score;
+      item.fromDoc      = !!best.fromDoc;
+      item.fromFilename = !best.fromDoc && !!item.fromFilename;
+    }
+  } catch(err) {
+    console.error('Erro ao processar', item.file.name, err);
+    item.status = 'error';
+    // Mesmo com falha no OCR, o pré-preenchimento por filename já está no item
+  }
+  const idx = S.renomear.indexOf(item);
+  if (idx >= 0) { updateRenomearRowFull(idx); updateRenomearCounts(); }
+}
+
+// Atualiza só as células afetadas de uma linha (sem perder o foco do input)
+function updateRenomearRowFull(idx) {
+  const row  = document.getElementById('rrow-' + idx);
+  if (!row) return;
+  const item = S.renomear[idx];
+  if (!item) return;
+  const ext     = extOf(item.file.name);
+  const newName = item.colabName ? item.colabName + ext : '';
+  const cells   = row.querySelectorAll('td');
+  const inp     = cells[1] && cells[1].querySelector('input');
+  // Só atualiza o input se não estiver em foco (para não interromper digitação)
+  if (inp && document.activeElement !== inp) inp.value = item.colabName;
+  // Atualiza exibição do contrato abaixo do input
+  const contratoDiv = cells[1] && cells[1].querySelector('div');
+  if (contratoDiv) {
+    const colab = S.colaboradores.find(c => c.nome === item.colabName);
+    contratoDiv.innerHTML = (colab && colab.contrato)
+      ? '<span style="font-size:10px;color:var(--gray-400)">📋 ' + escHtml(colab.contrato) + '</span>' : '';
+  }
+  if (cells[2]) cells[2].innerHTML = newName
+    ? '<span class="ren-new" title="' + escHtml(newName) + '">' + escHtml(newName) + '</span>'
+    : '<span style="color:var(--gray-400)">—</span>';
+  if (cells[3]) cells[3].innerHTML = makeSalaryBadge(item);
+  if (cells[4]) cells[4].innerHTML = makeBadge(item);
+}
+
+// Atualiza os contadores no cabeçalho do card
+function updateRenomearCounts() {
+  const count = document.getElementById('renomearCount');
+  const autoC = document.getElementById('renomearAutoCount');
+  if (!count) return;
+  count.textContent  = S.renomear.length + ' arquivo' + (S.renomear.length !== 1 ? 's' : '');
+  const reading      = S.renomear.filter(r => r.status === 'reading').length;
+  const autoMatched  = S.renomear.filter(r => r.auto && r.colabName).length;
+  if (autoC) {
+    if (reading > 0) {
+      autoC.textContent = '🔍 Analisando ' + reading + ' arquivo' + (reading !== 1 ? 's' : '') + '...';
+      autoC.className = 'badge b-gray'; autoC.style.display = '';
+    } else if (autoMatched > 0) {
+      autoC.textContent = autoMatched + ' identificado' + (autoMatched !== 1 ? 's' : '') + ' no conteúdo';
+      autoC.className = 'badge b-green'; autoC.style.display = '';
+    } else {
+      autoC.style.display = 'none';
+    }
+  }
+}
+
+// Retorna prioridade de exibição: 0 = mais urgente, 6 = ok/manual
+function statusSortKey(item) {
+  if (!item.colabName)                 return 0; // não identificado → pior
+  if (item.auto && item.score <= 0.7 && !item.fromFilename) return 1; // ⚠ baixa confiança
+  if (item.fromFilename)               return 2; // 📁 só nome do arquivo
+  if (item.status === 'reading')       return 3; // 🔍 lendo com nome pré-preenchido
+  if (item.auto && item.score > 0.7)   return 4; // ✓ boa confiança auto
+  if (item.fromDoc)                    return 5; // 📄 extraído do documento
+  return 6;                                      // Manual — usuário revisou
+}
+
+function renderRenomear() {
+  const card  = document.getElementById('renomearTableCard');
+  const tbody = document.getElementById('renomearTbody');
+  const count = document.getElementById('renomearCount');
+  const autoC = document.getElementById('renomearAutoCount');
+
+  if (!S.renomear.length) { card.style.display = 'none'; return; }
+  card.style.display = '';
+
+  const autoMatched = S.renomear.filter(r => r.auto && r.colabName).length;
+  count.textContent = S.renomear.length + ' arquivo' + (S.renomear.length !== 1 ? 's' : '');
+  autoC.textContent = autoMatched + ' identificado' + (autoMatched !== 1 ? 's' : '') + ' automaticamente';
+  if (!autoMatched) autoC.style.display = 'none'; else autoC.style.display = '';
+
+  // Update datalist with current collaborators
+  const dl = document.getElementById('dlColabs');
+  dl.innerHTML = S.colaboradores.map(c => '<option value="' + c.nome + '">').join('');
+
+  // Ordena por prioridade (pior primeiro) mantendo índice original de S.renomear
+  const sortedIdxs = S.renomear
+    .map((item, idx) => ({ key: statusSortKey(item), idx }))
+    .sort((a, b) => a.key - b.key)
+    .map(o => o.idx);
+
+  tbody.innerHTML = sortedIdxs.map(idx => {
+    const item = S.renomear[idx];
+    const ext      = extOf(item.file.name);
+    const newName  = item.colabName ? item.colabName + ext : '';
+    const badge    = makeBadge(item);
+    const salBadge = makeSalaryBadge(item);
+    const colab    = S.colaboradores.find(c => c.nome === item.colabName);
+    const contrato = colab && colab.contrato ? '<div style="font-size:10px;color:var(--gray-400);margin-top:2px">📋 ' + escHtml(colab.contrato) + '</div>' : '';
+    return `
+      <tr id="rrow-${idx}">
+        <td><span class="ren-orig" title="Clique para abrir: ${escHtml(item.file.name)}" onclick="abrirArquivo(${idx})">${escHtml(item.file.name)}</span></td>
+        <td>
+          <input class="ren-inp" type="text" list="dlColabs"
+            value="${escHtml(item.colabName)}"
+            placeholder="Colaborador..."
+            oninput="assignColab(${idx},this.value)"
+            onchange="assignColab(${idx},this.value)">
+          ${contrato}
+        </td>
+        <td><span class="ren-new" title="${escHtml(newName)}">${escHtml(newName) || '<span style="color:var(--gray-400)">—</span>'}</span></td>
+        <td class="tc">${salBadge}</td>
+        <td class="tc">${badge}</td>
+        <td class="tc"><button class="btn btn-danger btn-sm" onclick="removeRenomearItem(${idx})" title="Remover">✕</button></td>
+      </tr>`;
+  }).join('');
+}
+
+function makeBadge(item) {
+  // "Lendo" só se ainda processando E sem nome pré-preenchido
+  if (item.status === 'reading' && !item.colabName) return '<span class="badge b-gray">🔍 Lendo...</span>';
+  if (!item.colabName)                return '<span class="badge b-red">Não identificado</span>';
+  if (item.fromDoc)                   return '<span class="badge b-green">📄 Documento</span>';
+  if (item.fromFilename)              return item.status === 'reading'
+    ? '<span class="badge b-amber">📁 Arquivo · 🔍</span>'   // pré-preenchido, OCR ainda rodando
+    : '<span class="badge b-amber">📁 Nome do arquivo</span>';
+  if (item.auto && item.score > 0.7)  return '<span class="badge b-green">✓ ' + Math.round(item.score*100) + '%</span>';
+  if (item.auto)                      return '<span class="badge b-red">⚠ ' + Math.round(item.score*100) + '%</span>';
+  return '<span class="badge b-blue">Manual</span>';
+}
+
+function assignColab(idx, value) {
+  if (!S.renomear[idx]) return;
+  const trimmed = value.trim().toUpperCase();
+  S.renomear[idx].colabName = trimmed;
+  S.renomear[idx].auto    = false;
+  S.renomear[idx].score   = 0;
+  S.renomear[idx].fromDoc = false;
+  // Live-update only the affected row cells (avoid full re-render to keep focus)
+  const row = document.getElementById('rrow-' + idx);
+  if (!row) return;
+  const item    = S.renomear[idx];
+  const ext     = extOf(item.file.name);
+  const newName = trimmed ? trimmed + ext : '';
+  const cells   = row.querySelectorAll('td');
+  // Atualiza contrato abaixo do input
+  const contratoDiv = cells[1] && cells[1].querySelector('div');
+  if (contratoDiv) {
+    const colab = S.colaboradores.find(c => c.nome === trimmed);
+    contratoDiv.innerHTML = (colab && colab.contrato)
+      ? '<span style="font-size:10px;color:var(--gray-400)">📋 ' + escHtml(colab.contrato) + '</span>' : '';
+  }
+  cells[2].innerHTML = newName ? '<span class="ren-new" title="'+escHtml(newName)+'">'+escHtml(newName)+'</span>'
+                               : '<span style="color:var(--gray-400)">—</span>';
+  cells[3].innerHTML = makeSalaryBadge(item);   // valor (recalcula com novo colaborador)
+  cells[4].innerHTML = makeBadge(item);
+}
+
+function abrirArquivo(idx) {
+  const item = S.renomear[idx];
+  if (!item) return;
+  const url = URL.createObjectURL(item.file);
+  window.open(url, '_blank');
+  // Libera a object URL após um tempo suficiente para o browser carregar
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
+}
+
+function removeRenomearItem(idx) {
+  S.renomear.splice(idx, 1);
+  renderRenomear();
+}
+
+function clearRenomear() {
+  if (S.renomear.length && !confirm('Limpar todos os arquivos da lista?')) return;
+  S.renomear = [];
+  renderRenomear();
+}
+
+async function downloadRenameZip() {
+  const items = S.renomear.filter(i => i.colabName);
+  if (!items.length) { toast('Nenhum arquivo com colaborador atribuído'); return; }
+
+  const zip = new JSZip();
+  const root = zip.folder('COMPROVANTES DE PAGAMENTO');
+
+  // ── Agrupa por contrato ──────────────────────────────────────────────────
+  // Busca o contrato do colaborador na lista carregada; sem contrato → pasta geral
+  const byContrato = {};
+  for (const item of items) {
+    const colab    = S.colaboradores.find(c => c.nome === item.colabName);
+    const contrato = (colab && colab.contrato) ? colab.contrato.trim() : 'SEM CONTRATO';
+    if (!byContrato[contrato]) byContrato[contrato] = [];
+    byContrato[contrato].push(item);
+  }
+
+  // ── Gera arquivos — dentro de cada subpasta de contrato ─────────────────
+  // Usa subpastas sempre que houver contrato real identificado
+  const contratoKeys    = Object.keys(byContrato);
+  const usarSubpastas   = contratoKeys.length > 1 || (contratoKeys.length === 1 && contratoKeys[0] !== 'SEM CONTRATO');
+  let total = 0;
+  for (const [contrato, grupoItems] of Object.entries(byContrato)) {
+    const destFolder = usarSubpastas ? root.folder(contrato) : root;
+
+    // Conta duplicatas de nome dentro deste contrato
+    const nameCount = {}, nameIdx = {};
+    grupoItems.forEach(item => {
+      const key = item.colabName + extOf(item.file.name);
+      nameCount[key] = (nameCount[key] || 0) + 1;
+    });
+
+    for (const item of grupoItems) {
+      const ext     = extOf(item.file.name);
+      const baseKey = item.colabName + ext;
+      nameIdx[baseKey] = (nameIdx[baseKey] || 0) + 1;
+      const finalName  = nameCount[baseKey] > 1
+        ? item.colabName + ' (' + nameIdx[baseKey] + ')' + ext
+        : baseKey;
+      const ab = await item.file.arrayBuffer();
+      destFolder.file(finalName, ab);
+      total++;
+    }
+  }
+
+  const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
+  const a    = document.createElement('a');
+  a.href     = URL.createObjectURL(blob);
+  a.download = 'COMPROVANTES_' + compKey() + '.zip';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 8000);
+  const contratos = Object.keys(byContrato);
+  const infoContratos = contratos.length > 1
+    ? ' em ' + contratos.length + ' contrato' + (contratos.length !== 1 ? 's' : '')
+    : '';
+  toast('✓ ZIP gerado com ' + total + ' arquivo' + (total !== 1 ? 's' : '') + infoContratos + '!');
+}
+
+function extOf(filename) {
+  const i = filename.lastIndexOf('.');
+  return i >= 0 ? filename.slice(i).toLowerCase() : '';
+}
+
+function escHtml(str) {
+  return (str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ─── HELPERS ──────────────────────────────────────────────────────────────────
+
+function download(content, filename, type) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([content], { type: type+';charset=utf-8' }));
+  a.download = filename; a.click();
+}
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+
+document.addEventListener('DOMContentLoaded', () => {
+  initTabs();
+  initComp();
+  initZipUpload();
+  initFilters();
+  initRenomear();
+  loadState();
+  renderChecklist();
+  renderColabs();
+});
+</script>
+</body>
+</html>
