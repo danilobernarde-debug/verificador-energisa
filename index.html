@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Verificador Energisa — Documentos Trabalhistas</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%231a56db'/><path d='M20 2L8 18h8l-4 12 16-16h-8z' fill='%23fbbf24'/></svg>">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -182,6 +183,26 @@ hr { border: none; border-top: 1px solid var(--gray-200); margin: 14px 0; }
 .ren-inp  { width: 100%; padding: 5px 8px; border: 1px solid var(--gray-300); border-radius: 4px; font-size: 12px; outline: none; }
 .ren-inp:focus { border-color: var(--blue); }
 .info-box { background: var(--blue-light); border: 1px solid #bfdbfe; border-radius: var(--r-sm); padding: 10px 14px; margin-bottom: 14px; font-size: 12px; color: var(--blue-dark); }
+
+/* PREVIEW MODAL */
+.preview-overlay { position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:9000;display:flex;align-items:center;justify-content:center;padding:20px; }
+.preview-box { background:var(--white);border-radius:var(--r);max-width:92vw;max-height:92vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 64px rgba(0,0,0,0.48);min-width:320px; }
+.preview-hdr { display:flex;align-items:center;gap:10px;padding:11px 16px;border-bottom:1px solid var(--gray-200);flex-shrink:0; }
+.preview-fname { font-size:13px;font-weight:600;color:var(--gray-700);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.preview-body { overflow:auto;flex:1;display:flex;align-items:center;justify-content:center;padding:12px;background:var(--gray-50);min-height:200px; }
+.preview-body img { max-width:80vw;max-height:calc(90vh - 130px);object-fit:contain;border-radius:4px;display:block;box-shadow:0 2px 12px rgba(0,0,0,0.15); }
+.preview-body iframe { width:80vw;height:calc(90vh - 130px);border:none;display:block; }
+.ocr-img-wrapper { position:relative;display:inline-block;line-height:0; }
+.ocr-text-layer { position:absolute;top:0;left:0;pointer-events:none;overflow:hidden; }
+.ocr-text-layer span { position:absolute;color:transparent;white-space:nowrap;overflow:hidden;pointer-events:auto;cursor:text;user-select:text;-webkit-user-select:text; }
+.ocr-text-layer span::selection { background:rgba(0,100,255,0.25); }
+.preview-info { padding:8px 16px;border-bottom:1px solid var(--gray-200);font-size:12px;color:var(--gray-600);background:var(--gray-50);flex-shrink:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap; }
+.preview-extra { padding:0 12px 12px;flex-shrink:0; }
+@keyframes ocr-pulse { 0%,100%{opacity:1} 50%{opacity:0.45} }
+.ocr-loading { animation:ocr-pulse 1.4s ease-in-out infinite; }
+.tip-icon { cursor:pointer;color:var(--blue);font-size:12px;vertical-align:middle;opacity:0.7;transition:opacity 0.15s;user-select:none; }
+.tip-icon:hover { opacity:1; }
+#statusTip { position:fixed;z-index:9999;background:var(--gray-800);color:white;border-radius:var(--r);padding:12px 14px;width:280px;font-size:11px;line-height:1.75;box-shadow:0 4px 20px rgba(0,0,0,0.4); }
 </style>
 </head>
 <body>
@@ -191,24 +212,6 @@ hr { border: none; border-top: 1px solid var(--gray-200); margin: 14px 0; }
   <div>
     <div class="header-title">⚡ Verificador Energisa</div>
     <div class="header-sub">Controle de documentos trabalhistas — Grupo Energisa</div>
-  </div>
-  <div class="header-right">
-    <div class="comp-selector">
-      <label>Competência:</label>
-      <select id="selMes">
-        <option value="1">Janeiro</option><option value="2">Fevereiro</option>
-        <option value="3">Março</option><option value="4">Abril</option>
-        <option value="5">Maio</option><option value="6">Junho</option>
-        <option value="7">Julho</option><option value="8">Agosto</option>
-        <option value="9">Setembro</option><option value="10">Outubro</option>
-        <option value="11">Novembro</option><option value="12">Dezembro</option>
-      </select>
-      <select id="selAno"></select>
-    </div>
-    <div class="deadline" id="dlBadge">
-      <div class="days" id="dlDays">--</div>
-      <div class="dlabel" id="dlLabel">dias p/ prazo</div>
-    </div>
   </div>
 </header>
 
@@ -363,7 +366,7 @@ hr { border: none; border-top: 1px solid var(--gray-200); margin: 14px 0; }
             <th style="width:26%">Colaborador</th>
             <th style="width:22%">Novo nome</th>
             <th class="tc" style="width:16%" title="Valor encontrado no comprovante vs. salário da planilha. Pode divergir se for salário líquido.">Valor comprovante</th>
-            <th class="tc" style="width:10%">Status</th>
+            <th class="tc" style="width:10%">Status <span class="tip-icon" onclick="showStatusTip(event)">ⓘ</span></th>
             <th class="tc" style="width:4%"></th>
           </tr>
         </thead>
@@ -373,6 +376,20 @@ hr { border: none; border-top: 1px solid var(--gray-200); margin: 14px 0; }
     <p style="font-size:11px;color:var(--gray-400);margin-top:10px">
       💾 O ZIP gerado terá os arquivos organizados em <code>COMPROVANTES DE PAGAMENTO/<em>CONTRATO</em>/NOME DO COLABORADOR.ext</code> — separados por contrato quando a coluna "Contrato" estiver preenchida na planilha. &nbsp;·&nbsp; ✅ Verde na coluna Valor = comprovante confere com o salário da planilha. ⚠ Vermelho = divergência (pode ser salário líquido vs. bruto).
     </p>
+  </div>
+</div>
+
+<!-- MODAL PREVIEW COMPROVANTE -->
+<div id="previewModal" style="display:none" class="preview-overlay" onclick="if(event.target===this)fecharPreviewModal()">
+  <div class="preview-box" onclick="event.stopPropagation()">
+    <div class="preview-hdr">
+      <span id="previewModalTitle" class="preview-fname"></span>
+      <button class="btn btn-outline btn-sm" onclick="previewAbrirNova()" title="Abrir em nova aba">↗ Nova aba</button>
+      <button class="btn btn-outline btn-sm" onclick="fecharPreviewModal()">✕ Fechar</button>
+    </div>
+    <div id="previewModalInfo" class="preview-info" style="display:none"></div>
+    <div id="previewModalContent" class="preview-body"></div>
+    <div id="previewModalExtra" class="preview-extra" style="display:none"></div>
   </div>
 </div>
 
@@ -1652,9 +1669,7 @@ async function extractTextFromFile(file) {
     if (ext === '.pdf' && typeof pdfjsLib !== 'undefined') {
       return await extractTextFromPDF(file);
     }
-    if (typeof Tesseract !== 'undefined') {
-      return await extractTextFromImage(file);
-    }
+    // Imagens: OCR roda de forma lazy só quando o modal é aberto
   } catch(e) { console.warn('Extração falhou:', file.name, e); }
   return '';
 }
@@ -1681,23 +1696,102 @@ async function extractTextFromPDF(file) {
     rows.forEach(r => r.items.sort((a, b) => a.x - b.x));     // x crescente (esquerda → direita)
     text += rows.map(r => r.items.map(i => i.str).join(' ')).join('\n') + '\n';
   }
-  // Sem texto embutido → OCR via canvas (PDFs de imagem / escaneados)
-  if (!text.trim() && typeof Tesseract !== 'undefined') {
-    const page     = await pdf.getPage(1);
-    const viewport = page.getViewport({ scale: 3 }); // escala 3 = mais resolução para OCR
-    const canvas   = document.createElement('canvas');
-    canvas.width   = viewport.width;
-    canvas.height  = viewport.height;
-    await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
-    const res = await Tesseract.recognize(canvas, 'por+eng');
-    text = res.data.text;
-  }
   return text;
 }
 
 async function extractTextFromImage(file) {
   const res = await Tesseract.recognize(file, 'por+eng');
+  if (res.data && res.data.words) file._wordData = res.data.words;
   return res.data.text;
+}
+
+async function _showOcrImage(file, containerEl) {
+  const wrapper = document.createElement('div');
+  wrapper.className = 'ocr-img-wrapper';
+
+  const img = document.createElement('img');
+  img.src = _previewUrl;
+  img.style.cssText = 'max-width:80vw;max-height:calc(90vh - 130px);object-fit:contain;border-radius:4px;display:block;box-shadow:0 2px 12px rgba(0,0,0,0.15);';
+  wrapper.appendChild(img);
+  containerEl.appendChild(wrapper);
+
+  await new Promise(resolve => { img.onload = resolve; img.onerror = resolve; });
+
+  // Cache já existe (modal aberto antes para este arquivo)
+  if (file._ocrLines && file._ocrLines.length) {
+    _buildTextLayer(img, wrapper, file._ocrLines);
+    return;
+  }
+
+  const infoEl = document.getElementById('previewModalInfo');
+  if (infoEl) { infoEl.style.display = 'flex'; infoEl.innerHTML = '<span class="badge b-gray ocr-loading">🔍 Reconhecendo texto...</span>'; }
+
+  try {
+    if (typeof Tesseract === 'undefined') return;
+    const result  = await Tesseract.recognize(file, 'por+eng');
+    const text    = result.data.text || '';
+    file._ocrLines = result.data.lines || [];
+
+    // Atualiza o item na tabela com o resultado do OCR
+    const idx = S.renomear.findIndex(r => r.file === file);
+    if (idx >= 0) {
+      const item = S.renomear[idx];
+      item.extractedText  = text;
+      item.extractedValue = extractValueFromText(text);
+      item.status         = 'done';
+
+      // Tenta identificar colaborador se ainda não foi pelo conteúdo
+      if ((!item.colabName || item.fromFilename) && text.trim()) {
+        const best = autoMatchFromText(text) || findPersonNameInText(text);
+        if (best && (best.score || 0.8) > item.score) {
+          item.colabName = best.nome; item.auto = true;
+          item.fromDoc = true; item.fromFilename = false;
+          item.score = best.score || 0.8;
+        }
+      }
+      updateRenomearRowFull(idx);
+      updateRenomearCounts();
+    }
+
+    if (file._ocrLines.length) _buildTextLayer(img, wrapper, file._ocrLines);
+    if (_previewIdx >= 0) _updatePreviewInfo();
+  } catch(e) {
+    console.warn('OCR overlay falhou:', e);
+  }
+}
+
+function _buildTextLayer(img, wrapper, lines) {
+  const existing = wrapper.querySelector('.ocr-text-layer');
+  if (existing) existing.remove();
+  if (!lines || !lines.length) return;
+
+  const scaleX = img.width  / img.naturalWidth;
+  const scaleY = img.height / img.naturalHeight;
+
+  const layer = document.createElement('div');
+  layer.className = 'ocr-text-layer';
+  layer.style.width  = img.width  + 'px';
+  layer.style.height = img.height + 'px';
+
+  for (const line of lines) {
+    const text = (line.text || '').replace(/\n/g, ' ').trim();
+    if (!text) continue;
+    const { x0, y0, x1, y1 } = line.bbox;
+    const lw = (x1 - x0) * scaleX, lh = (y1 - y0) * scaleY;
+    if (lw <= 0 || lh <= 0) continue;
+
+    const span = document.createElement('span');
+    span.textContent  = text;
+    span.style.left      = (x0 * scaleX) + 'px';
+    span.style.top       = (y0 * scaleY) + 'px';
+    span.style.width     = lw + 'px';
+    span.style.height    = lh + 'px';
+    span.style.fontSize  = Math.max(6, lh * 0.85) + 'px';
+    span.style.lineHeight = lh + 'px';
+    layer.appendChild(span);
+  }
+
+  wrapper.appendChild(layer);
 }
 
 // ── Processamento assíncrono de cada arquivo ───────────────────────────────────
@@ -1759,7 +1853,11 @@ async function processFile(item) {
     // Mesmo com falha no OCR, o pré-preenchimento por filename já está no item
   }
   const idx = S.renomear.indexOf(item);
-  if (idx >= 0) { updateRenomearRowFull(idx); updateRenomearCounts(); }
+  if (idx >= 0) {
+    updateRenomearRowFull(idx);
+    updateRenomearCounts();
+    if (idx === _previewIdx) _updatePreviewInfo();
+  }
 }
 
 // Atualiza só as células afetadas de uma linha (sem perder o foco do input)
@@ -1911,12 +2009,147 @@ function assignColab(idx, value) {
   cells[4].innerHTML = makeBadge(item);
 }
 
+let _previewUrl = null;
+let _previewIdx = -1;
+
 function abrirArquivo(idx) {
   const item = S.renomear[idx];
   if (!item) return;
+
+  if (_previewUrl) { URL.revokeObjectURL(_previewUrl); _previewUrl = null; }
+  _previewIdx = idx;
+  _previewUrl = URL.createObjectURL(item.file);
+
+  document.getElementById('previewModalTitle').textContent = item.file.name;
+
+  const content = document.getElementById('previewModalContent');
+  content.innerHTML = '';
+
+  const ext = extOf(item.file.name);
+  if (['.jpg','.jpeg','.png','.gif','.webp','.bmp'].includes(ext)) {
+    _showOcrImage(item.file, content);
+  } else if (ext === '.pdf') {
+    const iframe = document.createElement('iframe');
+    iframe.src = _previewUrl;
+    content.appendChild(iframe);
+  } else {
+    content.innerHTML = '<p style="color:var(--gray-500);font-size:13px;text-align:center;padding:24px">Pré-visualização não disponível para este formato.<br><br><button class="btn btn-primary btn-sm" onclick="previewAbrirNova()">↗ Abrir em nova aba</button></p>';
+  }
+
+  document.getElementById('previewModal').style.display = 'flex';
+  document.addEventListener('keydown', _previewKeydown);
+  _updatePreviewInfo();
+}
+
+function _previewKeydown(e) {
+  if (e.key === 'Escape') fecharPreviewModal();
+}
+
+function fecharPreviewModal() {
+  document.getElementById('previewModal').style.display = 'none';
+  document.getElementById('previewModalContent').innerHTML = '';
+  document.getElementById('previewModalInfo').style.display = 'none';
+  document.getElementById('previewModalExtra').style.display = 'none';
+  document.getElementById('previewModalExtra').innerHTML = '';
+  document.removeEventListener('keydown', _previewKeydown);
+  if (_previewUrl) {
+    const u = _previewUrl; _previewUrl = null;
+    setTimeout(() => URL.revokeObjectURL(u), 5000);
+  }
+  _previewIdx = -1;
+}
+
+function _updatePreviewInfo() {
+  const infoEl  = document.getElementById('previewModalInfo');
+  const extraEl = document.getElementById('previewModalExtra');
+  if (!infoEl || _previewIdx < 0) return;
+  const item = S.renomear[_previewIdx];
+  if (!item) return;
+
+  const ext    = extOf(item.file.name);
+  const canOcr = ['.jpg','.jpeg','.png','.gif','.webp','.bmp','.pdf'].includes(ext);
+  if (!canOcr) { infoEl.style.display = 'none'; return; }
+
+  infoEl.style.display = 'flex';
+
+  if (item.status === 'reading') {
+    infoEl.innerHTML = '<span class="badge b-gray ocr-loading">🔍 Analisando texto com OCR...</span>';
+    return;
+  }
+
+  // OCR concluído — esconde painel de texto se estava aberto
+  if (extraEl) { extraEl.style.display = 'none'; extraEl.innerHTML = ''; }
+
+  if (item.colabName) {
+    const valStr  = item.extractedValue != null ? ' · ' + fmtBRL(item.extractedValue) : '';
+    const srcLbl  = item.fromDoc ? '📄 do documento' : item.fromFilename ? '📁 do arquivo' : 'Manual';
+    infoEl.innerHTML =
+      '<span style="color:var(--green);font-size:14px">✓</span>' +
+      '<strong style="color:var(--gray-700)">' + escHtml(item.colabName) + '</strong>' +
+      (valStr ? '<span style="color:var(--gray-500)">' + escHtml(valStr) + '</span>' : '') +
+      '<span class="badge b-gray" style="font-size:10px">' + srcLbl + '</span>';
+  } else {
+    const hasText = item.extractedText && item.extractedText.trim().length > 10;
+    infoEl.innerHTML =
+      '<span class="badge b-amber">⚠ Colaborador não identificado no documento</span>' +
+      (hasText ? '<button class="btn btn-outline btn-sm" onclick="_toggleExtractedText()">📝 Ver texto extraído</button>' : '');
+  }
+}
+
+function showStatusTip(e) {
+  e.stopPropagation();
+  const old = document.getElementById('statusTip');
+  if (old) { old.remove(); return; }
+
+  const rect = e.currentTarget.getBoundingClientRect();
+  const tip  = document.createElement('div');
+  tip.id     = 'statusTip';
+  tip.innerHTML = `
+    <div style="font-weight:600;border-bottom:1px solid rgba(255,255,255,0.2);padding-bottom:6px;margin-bottom:8px">Legenda — Coluna Status</div>
+    <div><span style="color:#6ee7b7">📄 Documento</span> — nome lido pelo OCR dentro do arquivo</div>
+    <div><span style="color:#6ee7b7">✓ 100%</span> — todos os termos do nome encontrados no documento</div>
+    <div><span style="color:#6ee7b7">✓ 75%</span> — maioria dos termos encontrados, boa confiança</div>
+    <div><span style="color:#fcd34d">📁 Arquivo</span> — nome extraído do nome do arquivo, não confirmado no conteúdo</div>
+    <div><span style="color:#fca5a5">⚠ 42%</span> — poucos termos encontrados — confira o colaborador</div>
+    <div><span style="color:#93c5fd">Manual</span> — atribuído manualmente por você</div>
+    <div><span style="color:#fca5a5">Não identificado</span> — nenhum colaborador reconhecido</div>
+    <div><span style="color:#d1d5db">🔍 Lendo...</span> — abra o modal para iniciar o OCR</div>
+    <div style="margin-top:8px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.15);color:#9ca3af">% = proporção dos termos do nome encontrados no texto</div>`;
+
+  // Posiciona abaixo do ícone, alinhado à direita
+  tip.style.top  = (rect.bottom + 8) + 'px';
+  tip.style.left = Math.max(8, rect.right - 280) + 'px';
+  document.body.appendChild(tip);
+
+  // Fecha ao clicar fora
+  setTimeout(() => document.addEventListener('click', function h() {
+    document.getElementById('statusTip')?.remove();
+    document.removeEventListener('click', h);
+  }), 0);
+}
+
+function _toggleExtractedText() {
+  const extraEl = document.getElementById('previewModalExtra');
+  if (!extraEl) return;
+  if (extraEl.style.display !== 'none' && extraEl.innerHTML) {
+    extraEl.style.display = 'none'; extraEl.innerHTML = ''; return;
+  }
+  const item = _previewIdx >= 0 ? S.renomear[_previewIdx] : null;
+  if (!item || !item.extractedText) return;
+  const preview = item.extractedText.trim().substring(0, 3000);
+  extraEl.innerHTML =
+    '<pre style="font-size:11px;white-space:pre-wrap;word-break:break-word;max-height:160px;overflow:auto;' +
+    'padding:10px 12px;background:white;border:1px solid var(--gray-200);border-radius:4px;color:var(--gray-700);margin-top:0">' +
+    escHtml(preview) + (item.extractedText.length > 3000 ? '\n[...]' : '') + '</pre>';
+  extraEl.style.display = 'block';
+}
+
+function previewAbrirNova() {
+  if (_previewIdx < 0) return;
+  const item = S.renomear[_previewIdx];
+  if (!item) return;
   const url = URL.createObjectURL(item.file);
   window.open(url, '_blank');
-  // Libera a object URL após um tempo suficiente para o browser carregar
   setTimeout(() => URL.revokeObjectURL(url), 30000);
 }
 
