@@ -334,8 +334,8 @@ hr { border: none; border-top: 1px solid var(--gray-200); margin: 14px 0; }
         <div style="font-size:11px;color:var(--gray-500);margin-top:2px">Carregue a planilha para identificar comprovantes pelo nome — ou use o ZIP na aba "Verificador de Pastas"</div>
         <div style="font-size:11px;color:var(--amber);margin-top:4px">⚠ A planilha deve ter colunas com os nomes <strong>Colaborador</strong>, <strong>Contrato</strong> e <strong>Salário</strong> no cabeçalho (linha 1).</div>
       </div>
-      <button class="btn btn-outline btn-sm" onclick="document.getElementById('fpFT').click()">📂 Carregar XLSX</button>
-      <input type="file" id="fpFT" accept=".xlsx,.xls">
+      <button class="btn btn-outline btn-sm" onclick="document.getElementById('fpFT').click()">📂 Carregar XLSX / CSV</button>
+      <input type="file" id="fpFT" accept=".xlsx,.xls,.csv">
     </div>
 
     <div class="upload-area disabled" id="upRenomear" onclick="document.getElementById('fpRenomear').click()">
@@ -1318,7 +1318,7 @@ function lerColaboradoresDePlanilha(wb) {
   for (let i = 1; i < rows.length; i++) {
     const r    = rows[i];
     const nome = String(r[colColab] || '').trim().toUpperCase();
-    if (!nome || seen.has(nome) || !pareceNomePessoa(nome)) continue;
+    if (!nome || nome.length < 3 || seen.has(nome)) continue;
     seen.add(nome);
     const contrato = colContrato >= 0 ? String(r[colContrato] || '').trim() : '';
     const salario  = colSalario  >= 0 ? parseSalary(r[colSalario]) : null;
@@ -1426,8 +1426,14 @@ function initRenomear() {
       const file = ftInp.files[0];
       if (!file) return;
       try {
-        const ab = await file.arrayBuffer();
-        const wb = XLSX.read(ab, { type: 'array' });
+        let wb;
+        if (file.name.toLowerCase().endsWith('.csv')) {
+          const text = await file.text();
+          wb = XLSX.read(text, { type: 'string', FS: ';' });
+        } else {
+          const ab = await file.arrayBuffer();
+          wb = XLSX.read(ab, { type: 'array' });
+        }
         const { count, erro } = lerColaboradoresDePlanilha(wb);
         if (erro) { toast('✗ ' + erro); ftInp.value = ''; return; }
         atualizarRenomearFTBadge();
