@@ -617,30 +617,17 @@ function extractFileNames(text) {
 // ─── COMPETÊNCIA / DEADLINE ───────────────────────────────────────────────────
 
 function initComp() {
-  const selMes = document.getElementById('selMes');
-  const selAno = document.getElementById('selAno');
   const now = new Date();
-  const yr = now.getFullYear();
-  for (let y = yr-2; y <= yr+1; y++) {
-    const o = document.createElement('option');
-    o.value = y; o.textContent = y;
-    if (y === yr) o.selected = true;
-    selAno.appendChild(o);
-  }
+  const yr  = now.getFullYear();
   const saved = localStorage.getItem('energisa_comp');
   let mes, ano;
   if (saved) { const c = JSON.parse(saved); mes = c.mes; ano = c.ano; }
   else {
-    mes = now.getMonth(); // 0-indexed = previous month
+    mes = now.getMonth(); // mês anterior (0-indexed)
     ano = yr;
     if (mes === 0) { mes = 12; ano--; }
   }
-  selMes.value = mes; selAno.value = ano;
   S.comp = { mes, ano };
-  selMes.addEventListener('change', onCompChange);
-  selAno.addEventListener('change', onCompChange);
-  updateDeadline();
-  updateCompLabel();
 }
 
 function onCompChange() {
