@@ -1297,26 +1297,31 @@ function pareceNomePessoa(str) {
 // Carrega colaboradores de qualquer planilha que tenha coluna "Colaborador".
 // Coluna "Contrato" é opcional — se existir, permite filtrar por contrato.
 // Retorna: { count, erro } — erro é string se coluna obrigatória não encontrada.
-function lerColaboradoresDePlanilha(wb) {
-  const sheet = wb.Sheets[wb.SheetNames[0]];
-  const rows  = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
-  if (rows.length < 2) return { count: 0, erro: 'Planilha vazia ou sem dados.' };
+function lerColaboradoresDePlanilha(rows) {
+  if (!rows || rows.length < 2) return { count: 0, erro: 'Planilha vazia ou sem dados.' };
 
-  // ── Localiza colunas pelo cabeçalho ─────────────────────────────────────
+  // ── Detecta colunas pelo cabeçalho ──────────────────────────────────────
   const header = rows[0].map(h => norm(String(h || '')));
-  const colColab    = header.findIndex(h => h === 'colaborador');
-  const colContrato = header.findIndex(h => h === 'contrato');
-  const colSalario  = header.findIndex(h => h === 'salario' || h === 'salario base' || h === 'sal' || h === 'vencimento');
+  let colColab    = header.findIndex(h => h === 'colaborador');
+  let colContrato = header.findIndex(h => h === 'contrato');
+  let colSalario  = header.findIndex(h => ['salario','salario base','sal','vencimento'].includes(h));
 
-  if (colColab < 0) {
-    return { count: 0, erro: 'Coluna "Colaborador" não encontrada. Verifique o cabeçalho da planilha.' };
+  // Fallback: formato Energisa com índices fixos (col 7 = nome, col 1 = contrato)
+  if (colColab < 0 && rows[0].length >= 8) {
+    colColab    = 7;
+    colContrato = 1;
   }
 
-  // ── Extrai nomes (e contratos + salário, se disponível) ─────────────────
+  if (colColab < 0) {
+    return { count: 0, erro: 'Coluna "Colaborador" não encontrada. Verifique o cabeçalho.' };
+  }
+
+  // ── Extrai nomes ─────────────────────────────────────────────────────────
   const seen = new Set();
   S.colaboradores = [];
   for (let i = 1; i < rows.length; i++) {
     const r    = rows[i];
+    if (!r || r.length <= colColab) continue;
     const nome = String(r[colColab] || '').trim().toUpperCase();
     if (!nome || nome.length < 3 || seen.has(nome)) continue;
     seen.add(nome);
@@ -1426,15 +1431,18 @@ function initRenomear() {
       const file = ftInp.files[0];
       if (!file) return;
       try {
-        let wb;
+        let rows;
         if (file.name.toLowerCase().endsWith('.csv')) {
           const text = await file.text();
-          wb = XLSX.read(text, { type: 'string', FS: ';' });
+          rows = text.split(/\r?\n/)
+            .map(l => l.split(';').map(c => c.replace(/^"|"$/g, '').trim()))
+            .filter(r => r.some(c => c));
         } else {
           const ab = await file.arrayBuffer();
-          wb = XLSX.read(ab, { type: 'array' });
+          const wb2 = XLSX.read(ab, { type: 'array' });
+          rows = XLSX.utils.sheet_to_json(wb2.Sheets[wb2.SheetNames[0]], { header: 1, defval: '' });
         }
-        const { count, erro } = lerColaboradoresDePlanilha(wb);
+        const { count, erro } = lerColaboradoresDePlanilha(rows);
         if (erro) { toast('✗ ' + erro); ftInp.value = ''; return; }
         atualizarRenomearFTBadge();
         const dl = document.getElementById('dlColabs');
