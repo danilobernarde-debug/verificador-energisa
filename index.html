@@ -29,17 +29,6 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .header { background: var(--blue); color: white; padding: 14px 24px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; box-shadow: var(--shadow-md); }
 .header-title { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
 .header-sub { font-size: 12px; opacity: 0.8; margin-top: 2px; }
-.header-right { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.comp-selector { display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.15); padding: 6px 12px; border-radius: var(--r); }
-.comp-selector label { font-size: 12px; opacity: 0.9; white-space: nowrap; }
-.comp-selector select { background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); color: white; padding: 4px 8px; border-radius: var(--r-sm); font-size: 13px; cursor: pointer; }
-.comp-selector select option { background: var(--blue-dark); }
-.deadline { background: rgba(255,255,255,0.15); padding: 6px 14px; border-radius: var(--r); text-align: center; min-width: 90px; }
-.deadline .days { font-size: 22px; font-weight: 700; line-height: 1; }
-.deadline .dlabel { font-size: 10px; opacity: 0.85; text-transform: uppercase; letter-spacing: 0.5px; }
-.deadline.urgent { background: rgba(220,38,38,0.45); }
-.deadline.warning { background: rgba(217,119,6,0.4); }
-.deadline.ok { background: rgba(5,122,85,0.35); }
 
 /* TABS */
 .tabs-nav { background: var(--white); border-bottom: 1px solid var(--gray-200); display: flex; padding: 0 24px; gap: 2px; overflow-x: auto; }
@@ -182,6 +171,18 @@ hr { border: none; border-top: 1px solid var(--gray-200); margin: 14px 0; }
 .ren-inp  { width: 100%; padding: 5px 8px; border: 1px solid var(--gray-300); border-radius: 4px; font-size: 12px; outline: none; }
 .ren-inp:focus { border-color: var(--blue); }
 .info-box { background: var(--blue-light); border: 1px solid #bfdbfe; border-radius: var(--r-sm); padding: 10px 14px; margin-bottom: 14px; font-size: 12px; color: var(--blue-dark); }
+
+/* PREVIEW MODAL */
+.prev-overlay { position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:9000;display:flex;align-items:center;justify-content:center;padding:20px }
+.prev-box { background:var(--white);border-radius:var(--r);max-width:92vw;max-height:92vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 64px rgba(0,0,0,.48) }
+.prev-hdr { display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--gray-200);flex-shrink:0 }
+.prev-fname { font-size:13px;font-weight:600;color:var(--gray-700);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap }
+.prev-body { overflow:auto;flex:1;display:flex;align-items:center;justify-content:center;padding:12px;background:var(--gray-50) }
+
+/* STATUS TIP */
+.tip-icon { cursor:pointer;color:var(--blue);font-size:11px;vertical-align:middle;opacity:.7;user-select:none }
+.tip-icon:hover { opacity:1 }
+#statusTip { position:fixed;z-index:9999;background:var(--gray-800);color:white;border-radius:var(--r);padding:12px 14px;width:290px;font-size:11px;line-height:1.8;box-shadow:0 4px 20px rgba(0,0,0,.4) }
 </style>
 </head>
 <body>
@@ -191,24 +192,6 @@ hr { border: none; border-top: 1px solid var(--gray-200); margin: 14px 0; }
   <div>
     <div class="header-title">⚡ Verificador Energisa</div>
     <div class="header-sub">Controle de documentos trabalhistas — Grupo Energisa</div>
-  </div>
-  <div class="header-right">
-    <div class="comp-selector">
-      <label>Competência:</label>
-      <select id="selMes">
-        <option value="1">Janeiro</option><option value="2">Fevereiro</option>
-        <option value="3">Março</option><option value="4">Abril</option>
-        <option value="5">Maio</option><option value="6">Junho</option>
-        <option value="7">Julho</option><option value="8">Agosto</option>
-        <option value="9">Setembro</option><option value="10">Outubro</option>
-        <option value="11">Novembro</option><option value="12">Dezembro</option>
-      </select>
-      <select id="selAno"></select>
-    </div>
-    <div class="deadline" id="dlBadge">
-      <div class="days" id="dlDays">--</div>
-      <div class="dlabel" id="dlLabel">dias p/ prazo</div>
-    </div>
   </div>
 </header>
 
@@ -363,7 +346,7 @@ hr { border: none; border-top: 1px solid var(--gray-200); margin: 14px 0; }
             <th style="width:26%">Colaborador</th>
             <th style="width:22%">Novo nome</th>
             <th class="tc" style="width:16%" title="Valor encontrado no comprovante vs. salário da planilha. Pode divergir se for salário líquido.">Valor comprovante</th>
-            <th class="tc" style="width:10%">Status</th>
+            <th class="tc" style="width:10%">Status <span class="tip-icon" onclick="showStatusTip(event)">ⓘ</span></th>
             <th class="tc" style="width:4%"></th>
           </tr>
         </thead>
@@ -373,6 +356,17 @@ hr { border: none; border-top: 1px solid var(--gray-200); margin: 14px 0; }
     <p style="font-size:11px;color:var(--gray-400);margin-top:10px">
       💾 O ZIP gerado terá os arquivos organizados em <code>COMPROVANTES DE PAGAMENTO/<em>CONTRATO</em>/NOME DO COLABORADOR.ext</code> — separados por contrato quando a coluna "Contrato" estiver preenchida na planilha. &nbsp;·&nbsp; ✅ Verde na coluna Valor = comprovante confere com o salário da planilha. ⚠ Vermelho = divergência (pode ser salário líquido vs. bruto).
     </p>
+  </div>
+</div>
+
+<!-- PREVIEW MODAL -->
+<div id="prevModal" style="display:none" class="prev-overlay" onclick="if(event.target===this)closePrevModal()">
+  <div class="prev-box" onclick="event.stopPropagation()">
+    <div class="prev-hdr">
+      <span id="prevModalTitle" class="prev-fname"></span>
+      <button class="btn btn-outline btn-sm" onclick="closePrevModal()">✕ Fechar</button>
+    </div>
+    <div id="prevModalContent" class="prev-body"></div>
   </div>
 </div>
 
@@ -600,64 +594,22 @@ function extractFileNames(text) {
 // ─── COMPETÊNCIA / DEADLINE ───────────────────────────────────────────────────
 
 function initComp() {
-  const selMes = document.getElementById('selMes');
-  const selAno = document.getElementById('selAno');
   const now = new Date();
-  const yr = now.getFullYear();
-  for (let y = yr-2; y <= yr+1; y++) {
-    const o = document.createElement('option');
-    o.value = y; o.textContent = y;
-    if (y === yr) o.selected = true;
-    selAno.appendChild(o);
-  }
+  const yr  = now.getFullYear();
   const saved = localStorage.getItem('energisa_comp');
   let mes, ano;
   if (saved) { const c = JSON.parse(saved); mes = c.mes; ano = c.ano; }
   else {
-    mes = now.getMonth(); // 0-indexed = previous month
+    mes = now.getMonth();
     ano = yr;
     if (mes === 0) { mes = 12; ano--; }
   }
-  selMes.value = mes; selAno.value = ano;
   S.comp = { mes, ano };
-  selMes.addEventListener('change', onCompChange);
-  selAno.addEventListener('change', onCompChange);
-  updateDeadline();
   updateCompLabel();
-}
-
-function onCompChange() {
-  S.comp = { mes: +document.getElementById('selMes').value, ano: +document.getElementById('selAno').value };
-  localStorage.setItem('energisa_comp', JSON.stringify(S.comp));
-  loadState();
-  updateDeadline();
-  updateCompLabel();
-  renderChecklist();
-  renderColabs();
 }
 
 function updateCompLabel() {
   document.getElementById('compLabel').textContent = `${MESES[S.comp.mes]} / ${S.comp.ano}`;
-}
-
-function updateDeadline() {
-  let dlMes = S.comp.mes + 1, dlAno = S.comp.ano;
-  if (dlMes > 12) { dlMes = 1; dlAno++; }
-  const deadline = new Date(dlAno, dlMes-1, 25, 23, 59, 59);
-  const diff = deadline - new Date();
-  const days = Math.ceil(diff / 86400000);
-  const badge = document.getElementById('dlBadge');
-  const dEl = document.getElementById('dlDays');
-  const lEl = document.getElementById('dlLabel');
-  if (diff < 0) {
-    dEl.textContent = 'VENCIDO';
-    lEl.textContent = `era 25/${String(dlMes).padStart(2,'0')}/${dlAno}`;
-    badge.className = 'deadline urgent';
-  } else {
-    dEl.textContent = days;
-    lEl.textContent = `dias p/ 25/${String(dlMes).padStart(2,'0')}`;
-    badge.className = 'deadline ' + (days <= 5 ? 'urgent' : days <= 10 ? 'warning' : 'ok');
-  }
 }
 
 // ─── TABS ─────────────────────────────────────────────────────────────────────
@@ -1395,6 +1347,32 @@ function makeSalaryBadge(item) {
   return '<span class="badge b-red" style="font-size:10px;font-variant-numeric:tabular-nums" title="Esperado: ' + fmtBRL(sal) + '">⚠ ' + fmtBRL(val) + '</span>';
 }
 
+function showStatusTip(e) {
+  e.stopPropagation();
+  const old = document.getElementById('statusTip');
+  if (old) { old.remove(); return; }
+  const rect = e.currentTarget.getBoundingClientRect();
+  const tip  = document.createElement('div');
+  tip.id = 'statusTip';
+  tip.innerHTML =
+    '<div style="font-weight:700;margin-bottom:6px;font-size:12px">Legenda — Coluna Status</div>' +
+    '<div><span style="color:#6ee7b7">📄 Documento</span> — nome lido dentro do arquivo (PDF/OCR)</div>' +
+    '<div><span style="color:#6ee7b7">✓ 100%</span> — todos os termos do nome encontrados</div>' +
+    '<div><span style="color:#6ee7b7">✓ 75%</span> — maioria dos termos encontrados</div>' +
+    '<div><span style="color:#fcd34d">📁 Nome do arquivo</span> — extraído do nome do arquivo, não confirmado no conteúdo</div>' +
+    '<div><span style="color:#fca5a5">⚠ 42%</span> — poucos termos encontrados, confira</div>' +
+    '<div><span style="color:#93c5fd">Manual</span> — atribuído manualmente por você</div>' +
+    '<div><span style="color:#fca5a5">Não identificado</span> — nenhum colaborador reconhecido</div>' +
+    '<div><span style="color:#d1d5db">🔍 Lendo...</span> — extração de texto em andamento</div>';
+  tip.style.top  = (rect.bottom + 6) + 'px';
+  tip.style.left = Math.max(8, rect.right - 290) + 'px';
+  document.body.appendChild(tip);
+  setTimeout(() => document.addEventListener('click', function h() {
+    document.getElementById('statusTip')?.remove();
+    document.removeEventListener('click', h);
+  }), 0);
+}
+
 function initRenomear() {
   // Configura worker do PDF.js (extração de texto de PDFs)
   if (typeof pdfjsLib !== 'undefined') {
@@ -1911,13 +1889,38 @@ function assignColab(idx, value) {
   cells[4].innerHTML = makeBadge(item);
 }
 
+let _prevModalUrl = null;
 function abrirArquivo(idx) {
   const item = S.renomear[idx];
   if (!item) return;
-  const url = URL.createObjectURL(item.file);
-  window.open(url, '_blank');
-  // Libera a object URL após um tempo suficiente para o browser carregar
-  setTimeout(() => URL.revokeObjectURL(url), 30000);
+  if (_prevModalUrl) { URL.revokeObjectURL(_prevModalUrl); _prevModalUrl = null; }
+  _prevModalUrl = URL.createObjectURL(item.file);
+  const ext = extOf(item.file.name).toLowerCase();
+  const content = document.getElementById('prevModalContent');
+  content.innerHTML = '';
+  if (['.jpg','.jpeg','.png','.gif','.webp','.bmp'].includes(ext)) {
+    const img = document.createElement('img');
+    img.src = _prevModalUrl;
+    img.style.cssText = 'max-width:82vw;max-height:calc(90vh - 80px);object-fit:contain;border-radius:4px';
+    content.appendChild(img);
+  } else if (ext === '.pdf') {
+    const fr = document.createElement('iframe');
+    fr.src = _prevModalUrl;
+    fr.style.cssText = 'width:82vw;height:calc(90vh - 80px);border:none';
+    content.appendChild(fr);
+  } else {
+    content.innerHTML = '<p style="color:var(--gray-500);padding:20px">Pré-visualização não disponível para este tipo de arquivo.<br><a href="'+_prevModalUrl+'" target="_blank" style="color:var(--blue)">Abrir em nova aba ↗</a></p>';
+  }
+  document.getElementById('prevModalTitle').textContent = item.file.name;
+  document.getElementById('prevModal').style.display = 'flex';
+  document.addEventListener('keydown', _prevModalKey);
+}
+function _prevModalKey(e) { if (e.key === 'Escape') closePrevModal(); }
+function closePrevModal() {
+  document.getElementById('prevModal').style.display = 'none';
+  document.getElementById('prevModalContent').innerHTML = '';
+  document.removeEventListener('keydown', _prevModalKey);
+  if (_prevModalUrl) { const u = _prevModalUrl; _prevModalUrl = null; setTimeout(() => URL.revokeObjectURL(u), 2000); }
 }
 
 function removeRenomearItem(idx) {
